@@ -82,8 +82,8 @@ export async function POST() {
         description: 'มีสิทธิ์เข้าถึงทุกฟังก์ชัน',
         isActive: true,
         permissions: {
-          create: allPermissions.map((p) => ({
-            permissionId: p.id,
+          create: allPermissions.map((permission) => ({
+            permissionId: permission.id,
           })),
         },
       },
@@ -103,8 +103,8 @@ export async function POST() {
         isActive: true,
         permissions: {
           create: allPermissions
-            .filter((p) => !p.code.startsWith('user.') && !p.code.startsWith('setting.edit'))
-            .map((p) => ({ permissionId: p.id })),
+            .filter((permission) => !permission.code.startsWith('user.') && !permission.code.startsWith('setting.edit'))
+            .map((permission) => ({ permissionId: permission.id })),
         },
       },
     });
@@ -123,13 +123,13 @@ export async function POST() {
         isActive: true,
         permissions: {
           create: allPermissions
-            .filter((p) => 
-              p.code.startsWith('dashboard') || 
-              p.code.startsWith('quotation') || 
-              p.code.startsWith('customer.view') ||
-              p.code.startsWith('tour.view')
+            .filter((permission) => 
+              permission.code.startsWith('dashboard') || 
+              permission.code.startsWith('quotation') || 
+              permission.code.startsWith('customer.view') ||
+              permission.code.startsWith('tour.view')
             )
-            .map((p) => ({ permissionId: p.id })),
+            .map((permission) => ({ permissionId: permission.id })),
         },
       },
     });
