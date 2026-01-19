@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -198,21 +198,6 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
   const [tourSearchLoading, setTourSearchLoading] = useState(false);
   const [isCustomTour, setIsCustomTour] = useState(false);
   const [isPaymentTypeManual, setIsPaymentTypeManual] = useState(false); // Track manual payment type selection
-
-  // Totals state
-  const [totals, setTotals] = useState({
-    vatExemptAmount: 0,
-    preTaxAmount: 0,
-    noVatAmount: 0,
-    discount: 0,
-    sum3Percent: 0,
-    preVatAmount: 0,
-    vatAmount: 0,
-    includeVatAmount: 0,
-    grandTotal: 0,
-    withholdingTax: 0,
-    netPayable: 0,
-  });
 
   // Computed: วันเดินทางควร disable เมื่อเลือกทัวร์จาก DB2 และยังไม่ได้ custom
   const isDateFieldsDisabled = selectedTour !== null && !isCustomTour;
@@ -731,8 +716,8 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
     }));
   };
 
-  // Calculate totals whenever items or relevant formData changes
-  useEffect(() => {
+  // Calculate totals - use useMemo for immediate calculation on render
+  const totals = useMemo(() => {
     // ตาม logic จาก blade.php calculatePaymentCondition
     let sumTotalNonVat = 0;   // ยอดรวมยกเว้นภาษี (VAT Exempt)
     let sumTotalVat = 0;      // ราคาสุทธิสินค้าที่เสียภาษี (has VAT)
@@ -743,11 +728,12 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
     items.forEach(item => {
       if (item.itemType === 'INCOME') {
         // คำนวณ rowTotal รวม 3% ถ้าติ๊ก hasWithholdingTax
-        let rowTotal = item.amount;
+        const amount = Number(item.amount) || 0;
+        let rowTotal = amount;
         if (item.hasWithholdingTax) {
-          const plus3 = item.amount * 0.03;
+          const plus3 = amount * 0.03;
           sum3Percent += plus3;
-          rowTotal = item.amount + plus3;
+          rowTotal = amount + plus3;
         }
         
         if (item.vatType === 'VAT') {
@@ -757,7 +743,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
           sumTotalNonVat += rowTotal;
         }
       } else if (item.itemType === 'DISCOUNT') {
-        sumDiscount += item.amount;
+        sumDiscount += Number(item.amount) || 0;
       }
     });
 
@@ -805,7 +791,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
     // Net payable after withholding tax
     const netPayable = grandTotal - withholdingTax;
 
-    setTotals({
+    return {
       vatExemptAmount: sumTotalNonVat,
       preTaxAmount: sumTotalVat,
       noVatAmount: 0, // รวมใน sumTotalNonVat แล้ว
@@ -817,7 +803,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
       grandTotal,
       withholdingTax,
       netPayable,
-    });
+    };
   }, [items, formData.vatMode, formData.hasWithholdingTax]);
 
   // Recalculate deposit total when paxCount or depositAmount changes
