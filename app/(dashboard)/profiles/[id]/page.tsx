@@ -65,17 +65,13 @@ export default function ViewProfilePage({ params }: { params: Promise<{ id: stri
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="text-center py-8">กำลังโหลด...</div>
-      </DashboardLayout>
+      <div className="text-center py-8">กำลังโหลด...</div>
     );
   }
 
   if (!profile) {
     return (
-      <DashboardLayout>
-        <div className="text-center py-8">ไม่พบข้อมูลโปรไฟล์</div>
-      </DashboardLayout>
+      <div className="text-center py-8">ไม่พบข้อมูลโปรไฟล์</div>
     );
   }
 
