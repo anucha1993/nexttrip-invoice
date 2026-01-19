@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 
 // GET - List quotations with pagination and search
 export async function GET(request: NextRequest) {
+  console.log('📥 GET /api/quotations - Request received');
   let conn;
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -12,7 +13,11 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || '';
     const offset = (page - 1) * limit;
 
+    console.log('🔍 Query params:', { page, limit, search, status });
+
+    console.log('🔌 Getting database connection...');
     conn = await pool.getConnection();
+    console.log('✅ Database connected');
 
     // Build WHERE clause
     let whereClause = '1=1';
@@ -76,6 +81,8 @@ export async function GET(request: NextRequest) {
     const dataParams = [...params, limit, offset];
     const rows = await conn.query(dataQuery, dataParams);
 
+    console.log('📊 Query results:', { totalRows: rows.length, total, page, limit });
+
     return NextResponse.json({
       data: rows,
       pagination: {
@@ -86,13 +93,20 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error fetching quotations:', error);
+    console.error('❌ Error fetching quotations:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
-      { error: 'Failed to fetch quotations' },
+      { 
+        error: 'Failed to fetch quotations',
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   } finally {
-    if (conn) conn.release();
+    if (conn) {
+      console.log('🔌 Releasing database connection');
+      conn.release();
+    }
   }
 }
 

@@ -12,8 +12,16 @@ export function Header() {
 
   useEffect(() => {
     fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => setUser(data.user));
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch user');
+        return res.json();
+      })
+      .then(data => setUser(data.user))
+      .catch(error => {
+        console.error('Error fetching user:', error);
+        // Optionally redirect to login if auth fails
+        // router.push('/login');
+      });
   }, []);
 
   const handleLogout = async () => {

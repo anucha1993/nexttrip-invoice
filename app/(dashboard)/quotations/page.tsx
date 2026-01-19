@@ -104,15 +104,39 @@ export default function QuotationsPage() {
       params.append('page', currentPage.toString());
       params.append('limit', limit.toString());
 
-      const response = await fetch(`/api/quotations?${params}`);
+      const url = `/api/quotations?${params}`;
+      const fullUrl = `${window.location.origin}${url}`;
+      console.log('Fetching quotations from:', url);
+      console.log('Full URL:', fullUrl);
+      console.log('Window location:', window.location.href);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (response.ok) {
         const result = await response.json();
+        console.log('Data received:', result);
         setQuotations(result.data);
         setTotalPages(result.pagination.totalPages);
         setTotalItems(result.pagination.total);
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('API error:', response.status, errorData);
       }
     } catch (error) {
       console.error('Error fetching quotations:', error);
+      console.error('Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
     } finally {
       setLoading(false);
     }
