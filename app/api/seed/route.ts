@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import type { Permission } from '@prisma/client';
 
 // POST - สร้างข้อมูลตัวอย่าง
 export async function POST() {
@@ -82,7 +83,7 @@ export async function POST() {
         description: 'มีสิทธิ์เข้าถึงทุกฟังก์ชัน',
         isActive: true,
         permissions: {
-          create: allPermissions.map((permission) => ({
+          create: allPermissions.map((permission: Permission) => ({
             permissionId: permission.id,
           })),
         },
@@ -103,8 +104,8 @@ export async function POST() {
         isActive: true,
         permissions: {
           create: allPermissions
-            .filter((permission) => !permission.code.startsWith('user.') && !permission.code.startsWith('setting.edit'))
-            .map((permission) => ({ permissionId: permission.id })),
+            .filter((permission: Permission) => !permission.code.startsWith('user.') && !permission.code.startsWith('setting.edit'))
+            .map((permission: Permission) => ({ permissionId: permission.id })),
         },
       },
     });
@@ -123,13 +124,13 @@ export async function POST() {
         isActive: true,
         permissions: {
           create: allPermissions
-            .filter((permission) => 
+            .filter((permission: Permission) => 
               permission.code.startsWith('dashboard') || 
               permission.code.startsWith('quotation') || 
               permission.code.startsWith('customer.view') ||
               permission.code.startsWith('tour.view')
             )
-            .map((permission) => ({ permissionId: permission.id })),
+            .map((permission: Permission) => ({ permissionId: permission.id })),
         },
       },
     });
