@@ -75,7 +75,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
 
           const permissions =
-            user.profile?.permissions.map((p) => p.permission.code) || [];
+            user.profile?.permissions.map((p: any) => p.permission.code) || [];
 
           console.log('✅ Login successful for:', user.email);
           console.log('📋 Permissions:', permissions.length);
