@@ -35,23 +35,24 @@ export async function GET() {
 
 // POST - สร้าง Permission ใหม่
 export async function POST(request: NextRequest) {
+  let conn;
   try {
     const body = await request.json();
     const { code, name, module, description } = body;
 
-    const permission = await prisma.permission.create({
-      data: {
-        code,
-        name,
-        module,
-        description,
-      },
-    });
+    conn = await pool.getConnection();
+    
+    const result = await conn.query(`
+      INSERT INTO permissions (code, name, module, description)
+      VALUES (?, ?, ?, ?)
+    `, [code, name, module, description || null]);
 
-    return NextResponse.json(permission, { status: 201 });
+    const permissions = await conn.query('SELECT * FROM permissions WHERE id = ?', [result.insertId]);
+
+    return NextResponse.json(permissions[0], { status: 201 });
   } catch (error: any) {
     console.error('Error creating permission:', error);
-    if (error.code === 'P2002') {
+    if (error.code === 'ER_DUP_ENTRY') {
       return NextResponse.json(
         { error: 'รหัส Permission นี้มีอยู่แล้ว' },
         { status: 400 }
@@ -61,5 +62,7 @@ export async function POST(request: NextRequest) {
       { error: 'Failed to create permission' },
       { status: 500 }
     );
+  } finally {
+    if (conn) conn.release();
   }
 }

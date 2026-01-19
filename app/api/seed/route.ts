@@ -65,8 +65,74 @@ export async function POST() {
       });
     }
 
-    // Get all permissions for admin
+    // Get all permissions for admin profile
     const allPermissions = await prisma.permission.findMany();
+
+    // สร้าง Profiles ตัวอย่าง
+    const adminProfile = await prisma.profile.upsert({
+      where: { code: 'ADMIN' },
+      update: {
+        name: 'ผู้ดูแลระบบ',
+        description: 'มีสิทธิ์เข้าถึงทุกฟังก์ชัน',
+        isActive: true,
+      },
+      create: {
+        code: 'ADMIN',
+        name: 'ผู้ดูแลระบบ',
+        description: 'มีสิทธิ์เข้าถึงทุกฟังก์ชัน',
+        isActive: true,
+        permissions: {
+          create: allPermissions.map(p => ({
+            permissionId: p.id,
+          })),
+        },
+      },
+    });
+
+    const managerProfile = await prisma.profile.upsert({
+      where: { code: 'MANAGER' },
+      update: {
+        name: 'ผู้จัดการ',
+        description: 'จัดการทั่วไป ยกเว้นผู้ใช้และการตั้งค่า',
+        isActive: true,
+      },
+      create: {
+        code: 'MANAGER',
+        name: 'ผู้จัดการ',
+        description: 'จัดการทั่วไป ยกเว้นผู้ใช้และการตั้งค่า',
+        isActive: true,
+        permissions: {
+          create: allPermissions
+            .filter(p => !p.code.startsWith('user.') && !p.code.startsWith('setting.edit'))
+            .map(p => ({ permissionId: p.id })),
+        },
+      },
+    });
+
+    const salesProfile = await prisma.profile.upsert({
+      where: { code: 'SALES' },
+      update: {
+        name: 'พนักงานขาย',
+        description: 'จัดการใบเสนอราคาและลูกค้า',
+        isActive: true,
+      },
+      create: {
+        code: 'SALES',
+        name: 'พนักงานขาย',
+        description: 'จัดการใบเสนอราคาและลูกค้า',
+        isActive: true,
+        permissions: {
+          create: allPermissions
+            .filter(p => 
+              p.code.startsWith('dashboard') || 
+              p.code.startsWith('quotation') || 
+              p.code.startsWith('customer.view') ||
+              p.code.startsWith('tour.view')
+            )
+            .map(p => ({ permissionId: p.id })),
+        },
+      },
+    });
 
     // สร้าง Users ตัวอย่าง
     const usersData = [
@@ -74,60 +140,22 @@ export async function POST() {
         email: 'admin@nexttrip.com',
         password: 'admin123',
         name: 'ผู้ดูแลระบบ',
-        role: 'ADMIN' as const,
+        profileId: adminProfile.id,
         isActive: true,
-        permissions: allPermissions.map(p => p.id), // Admin has all permissions
       },
       {
         email: 'manager@nexttrip.com',
         password: 'manager123',
         name: 'สมชาย จัดการ',
-        role: 'STAFF' as const,
+        profileId: managerProfile.id,
         isActive: true,
-        permissions: allPermissions
-          .filter(p => !p.code.startsWith('user.') && !p.code.startsWith('setting.edit'))
-          .map(p => p.id),
       },
       {
         email: 'sales@nexttrip.com',
         password: 'sales123',
         name: 'สมหญิง ขายดี',
-        role: 'STAFF' as const,
+        profileId: salesProfile.id,
         isActive: true,
-        permissions: allPermissions
-          .filter(p => 
-            p.code.startsWith('dashboard') || 
-            p.code.startsWith('quotation') || 
-            p.code.startsWith('customer.view') ||
-            p.code.startsWith('tour.view')
-          )
-          .map(p => p.id),
-      },
-      {
-        email: 'finance@nexttrip.com',
-        password: 'finance123',
-        name: 'วิชัย การเงิน',
-        role: 'STAFF' as const,
-        isActive: true,
-        permissions: allPermissions
-          .filter(p => 
-            p.code.startsWith('dashboard') || 
-            p.code.startsWith('invoice') || 
-            p.code.startsWith('payment') || 
-            p.code.startsWith('receipt') ||
-            p.code.startsWith('report')
-          )
-          .map(p => p.id),
-      },
-      {
-        email: 'viewer@nexttrip.com',
-        password: 'viewer123',
-        name: 'มาลี ดูอย่างเดียว',
-        role: 'VIEWER' as const,
-        isActive: true,
-        permissions: allPermissions
-          .filter(p => p.code.endsWith('.view'))
-          .map(p => p.id),
       },
     ];
 
@@ -142,27 +170,22 @@ export async function POST() {
 
       if (existingUser) {
         // Update existing user
-        await prisma.userPermission.deleteMany({
-          where: { userId: existingUser.id },
-        });
-
         const user = await prisma.user.update({
           where: { email: userData.email },
           data: {
             password: hashedPassword,
             name: userData.name,
-            role: userData.role,
+            profileId: userData.profileId,
             isActive: userData.isActive,
-            permissions: {
-              create: userData.permissions.map(permissionId => ({
-                permissionId,
-              })),
-            },
           },
           include: {
-            permissions: {
+            profile: {
               include: {
-                permission: true,
+                permissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
               },
             },
           },
@@ -175,18 +198,17 @@ export async function POST() {
             email: userData.email,
             password: hashedPassword,
             name: userData.name,
-            role: userData.role,
+            profileId: userData.profileId,
             isActive: userData.isActive,
-            permissions: {
-              create: userData.permissions.map(permissionId => ({
-                permissionId,
-              })),
-            },
           },
           include: {
-            permissions: {
+            profile: {
               include: {
-                permission: true,
+                permissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
               },
             },
           },

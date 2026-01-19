@@ -127,8 +127,9 @@ export interface QuotationFormProps {
     customerContactPhone?: string | null;
     customerNotes?: string | null;
     tourName?: string;
-    tourNameOriginal?: string;
-    tourCode?: string;
+    bookingCode?: string;
+    ntCode?: string;
+    customTourCode?: string;
     countryId?: number | null;
     airlineId?: number | null;
     wholesaleId?: number | null;
@@ -198,6 +199,21 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
   const [isCustomTour, setIsCustomTour] = useState(false);
   const [isPaymentTypeManual, setIsPaymentTypeManual] = useState(false); // Track manual payment type selection
 
+  // Totals state
+  const [totals, setTotals] = useState({
+    vatExemptAmount: 0,
+    preTaxAmount: 0,
+    noVatAmount: 0,
+    discount: 0,
+    sum3Percent: 0,
+    preVatAmount: 0,
+    vatAmount: 0,
+    includeVatAmount: 0,
+    grandTotal: 0,
+    withholdingTax: 0,
+    netPayable: 0,
+  });
+
   // Computed: วันเดินทางควร disable เมื่อเลือกทัวร์จาก DB2 และยังไม่ได้ custom
   const isDateFieldsDisabled = selectedTour !== null && !isCustomTour;
 
@@ -205,7 +221,6 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
   const [formData, setFormData] = useState({
     customerId: initialData?.customerId || '',
     tourName: initialData?.tourName || '',
-    tourNameOriginal: initialData?.tourNameOriginal || '',
     bookingCode: initialData?.bookingCode || '',
     ntCode: initialData?.ntCode || '',
     customTourCode: initialData?.customTourCode || '',
@@ -716,8 +731,8 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
     }));
   };
 
-  // Calculate totals
-  const calculateTotals = () => {
+  // Calculate totals whenever items or relevant formData changes
+  useEffect(() => {
     // ตาม logic จาก blade.php calculatePaymentCondition
     let sumTotalNonVat = 0;   // ยอดรวมยกเว้นภาษี (VAT Exempt)
     let sumTotalVat = 0;      // ราคาสุทธิสินค้าที่เสียภาษี (has VAT)
@@ -790,7 +805,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
     // Net payable after withholding tax
     const netPayable = grandTotal - withholdingTax;
 
-    return {
+    setTotals({
       vatExemptAmount: sumTotalNonVat,
       preTaxAmount: sumTotalVat,
       noVatAmount: 0, // รวมใน sumTotalNonVat แล้ว
@@ -802,10 +817,8 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
       grandTotal,
       withholdingTax,
       netPayable,
-    };
-  };
-
-  const totals = calculateTotals();
+    });
+  }, [items, formData.vatMode, formData.hasWithholdingTax]);
 
   // Recalculate deposit total when paxCount or depositAmount changes
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import crypto from 'crypto';
+import type { PoolConnection } from 'mariadb';
 
 function generateCuid() {
   return 'c' + crypto.randomBytes(12).toString('hex');
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
 }
 
 // GET - สร้างรหัสลูกค้าใหม่
-async function generateCustomerCode(conn: mariadb.PoolConnection): Promise<string> {
+async function generateCustomerCode(conn: PoolConnection): Promise<string> {
   const result = await conn.query(`
     SELECT code FROM customers 
     WHERE code LIKE 'CUS%' 
