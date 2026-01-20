@@ -120,7 +120,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
   const handleLinkClick = () => {
     // Close sidebar on mobile when clicking a link
-    if (window.innerWidth < 1024) {
+    if (window.innerWidth < 1024 && onClose) {
       onClose();
     }
   };
