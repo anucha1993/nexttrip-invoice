@@ -25,7 +25,7 @@ import {
   Shield,
   ShoppingBag,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SubMenuItem {
   label: string;
@@ -125,26 +125,56 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     }
   };
 
+  // On mobile, sidebar should be hidden by default and slide in when isOpen is true
+  // On desktop (lg+), sidebar is always visible
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    checkDesktop();
+    window.addEventListener('resize', checkDesktop);
+    return () => window.removeEventListener('resize', checkDesktop);
+  }, []);
+
+  // Calculate if sidebar should be visible
+  const shouldShow = isDesktop || isOpen;
+
   return (
-    <aside
-      className={`fixed left-0 top-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300 
+    <aside 
+      className={`
+        fixed left-0 top-0 z-40 h-screen bg-white border-r border-gray-200 
+        transition-transform duration-300 ease-in-out
         ${collapsed ? 'w-16' : 'w-64'}
-        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}
+      style={{
+        transform: shouldShow ? 'translateX(0)' : 'translateX(-100%)'
+      }}
     >
       {/* Logo */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
         {!collapsed && (
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2" onClick={handleLinkClick}>
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">NT</span>
             </div>
             <span className="font-semibold text-gray-900">NextTrip</span>
           </Link>
         )}
+        
+        {/* Close button for mobile */}
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors lg:hidden"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        
+        {/* Collapse button for desktop */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors hidden lg:block"
         >
           {collapsed ? (
             <ChevronRight className="w-5 h-5" />
@@ -155,7 +185,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="p-3 space-y-1 overflow-y-auto h-[calc(100vh-8rem)]">
+      <nav className="p-3 space-y-1 overflow-y-auto h-[calc(100vh-8rem)] scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300">
         {menuItems.map((item) => {
           const isActive = isMenuActive(item);
           const isExpanded = expandedMenus.includes(item.label);

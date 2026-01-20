@@ -290,7 +290,7 @@ export default function QuotationsPage() {
         </CardContent>
       </Card>
 
-      {/* Table */}
+      {/* Table - Desktop / Card - Mobile */}
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -303,7 +303,88 @@ export default function QuotationsPage() {
               <p>ไม่พบใบเสนอราคา</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              {/* Mobile Card View */}
+              <div className="block lg:hidden divide-y divide-gray-200">
+                {quotations.map((quotation) => {
+                  const statusInfo = statusLabels[quotation.status];
+                  const StatusIcon = statusInfo?.icon || FileText;
+                  const paymentInfo = paymentStatusLabels[quotation.paymentStatus];
+                  return (
+                    <div key={quotation.id} className="p-4 space-y-3">
+                      {/* Header Row */}
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-semibold text-blue-600">{quotation.quotationNumber}</div>
+                          <div className="text-xs text-gray-500">{formatDate(quotation.quotationDate)}</div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Link href={`/quotations/${quotation.id}/dashboard`}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Link href={`/quotations/${quotation.id}`}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-red-600"
+                            onClick={() => setDeleteId(quotation.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Customer */}
+                      <div>
+                        <div className="font-medium text-gray-900">{quotation.customerName}</div>
+                        {quotation.customerPhone && (
+                          <div className="text-sm text-gray-500">{quotation.customerPhone}</div>
+                        )}
+                      </div>
+
+                      {/* Tour Name */}
+                      <div className="text-sm text-gray-700 line-clamp-2">{quotation.tourName}</div>
+
+                      {/* Date & PAX */}
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <Calendar className="w-4 h-4" />
+                          <span>{formatDateRange(quotation.departureDate, quotation.returnDate)}</span>
+                        </div>
+                        <div className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded text-gray-700">
+                          <Users className="w-3 h-3" />
+                          <span className="font-medium">{quotation.paxCount}</span>
+                        </div>
+                      </div>
+
+                      {/* Price & Status */}
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                        <div>
+                          <div className="text-lg font-bold text-gray-900">{formatPrice(quotation.grandTotal)} <span className="text-sm font-normal text-gray-500">บาท</span></div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo?.color}`}>
+                            <StatusIcon className="w-3 h-3" />
+                            {statusInfo?.label}
+                          </span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${paymentInfo?.color}`}>
+                            {paymentInfo?.label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -412,6 +493,7 @@ export default function QuotationsPage() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
 
           {/* Pagination */}

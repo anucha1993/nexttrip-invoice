@@ -88,110 +88,110 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3 sm:gap-4">
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4">
           <Link href="/quotations">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              กลับ
+            <Button variant="ghost" size="sm" className="shrink-0">
+              <ArrowLeft className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">กลับ</span>
             </Button>
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard - {quotation.quotationNumber}</h1>
-            <p className="text-gray-600">{quotation.tourName}</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Dashboard - {quotation.quotationNumber}</h1>
+            <p className="text-sm text-gray-600 truncate">{quotation.tourName}</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 justify-end">
           <Link href={`/quotations/${resolvedParams.id}`}>
-            <Button variant="outline" size="sm">
-              <Eye className="w-4 h-4 mr-2" />
-              ดูใบเสนอราคา
+            <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+              <Eye className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">ดูใบเสนอราคา</span>
             </Button>
           </Link>
           <Link href={`/quotations/${resolvedParams.id}/edit`}>
-            <Button size="sm">
-              <Pencil className="w-4 h-4 mr-2" />
-              แก้ไข
+            <Button size="sm" className="text-xs sm:text-sm">
+              <Pencil className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">แก้ไข</span>
             </Button>
           </Link>
         </div>
       </div>
 
       {/* Tour Info Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Users className="w-6 h-6 text-blue-600" />
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-3 bg-blue-100 rounded-lg shrink-0">
+                <Users className="w-4 h-4 sm:w-6 sm:h-6 text-blue-600" />
               </div>
-              <div>
-                <p className="text-sm text-gray-600">ลูกค้า</p>
-                <p className="text-lg font-bold truncate">{quotation.customerName}</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-gray-600">ลูกค้า</p>
+                <p className="text-sm sm:text-lg font-bold truncate">{quotation.customerName}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Calendar className="w-6 h-6 text-green-600" />
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-3 bg-green-100 rounded-lg shrink-0">
+                <Calendar className="w-4 h-4 sm:w-6 sm:h-6 text-green-600" />
               </div>
-              <div>
-                <p className="text-sm text-gray-600">วันเดินทาง</p>
-                <p className="text-lg font-bold">{quotation.numDays || '-'}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <Users className="w-6 h-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">จำนวน PAX</p>
-                <p className="text-lg font-bold">{quotation.paxCount} คน</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-gray-600">วันเดินทาง</p>
+                <p className="text-sm sm:text-lg font-bold">{quotation.numDays || '-'}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-amber-100 rounded-lg">
-                <DollarSign className="w-6 h-6 text-amber-600" />
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-3 bg-purple-100 rounded-lg shrink-0">
+                <Users className="w-4 h-4 sm:w-6 sm:h-6 text-purple-600" />
               </div>
-              <div>
-                <p className="text-sm text-gray-600">ยอดรวม</p>
-                <p className="text-lg font-bold">{quotation.grandTotal?.toLocaleString() || '0'} ฿</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-gray-600">จำนวน PAX</p>
+                <p className="text-sm sm:text-lg font-bold">{quotation.paxCount} คน</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-3 bg-amber-100 rounded-lg shrink-0">
+                <DollarSign className="w-4 h-4 sm:w-6 sm:h-6 text-amber-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-gray-600">ยอดรวม</p>
+                <p className="text-sm sm:text-lg font-bold">{quotation.grandTotal?.toLocaleString() || '0'} ฿</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-300">
-        <div className="flex gap-2 overflow-x-auto pb-px">
+      {/* Tabs - Scrollable on mobile */}
+      <div className="border-b border-gray-300 -mx-3 sm:mx-0 px-3 sm:px-0">
+        <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-px scrollbar-none">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3  font-medium text-sm whitespace-nowrap transition-colors ${
+                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors border-b-2 shrink-0 ${
                   activeTab === tab.id
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
                 }`}
               >
                 <Icon className="w-4 h-4" />
-                {tab.label}
+                <span className="hidden xs:inline sm:inline">{tab.label}</span>
               </button>
             );
           })}
@@ -235,52 +235,52 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
 
 function OverviewTab({ quotation }: { quotation: any }) {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {/* Customer Info */}
         <Card>
-          <CardHeader>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Users className="w-5 h-5" />
+          <CardHeader className="pb-2 sm:pb-4">
+            <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5" />
               ข้อมูลลูกค้า
             </h3>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 sm:space-y-3">
             <div>
-              <p className="text-sm text-gray-600">ชื่อ</p>
-              <p className="font-medium">{quotation.customerName}</p>
+              <p className="text-xs sm:text-sm text-gray-600">ชื่อ</p>
+              <p className="font-medium text-sm sm:text-base">{quotation.customerName}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">เบอร์โทร</p>
-              <p className="font-medium">{quotation.customerPhone || '-'}</p>
+              <p className="text-xs sm:text-sm text-gray-600">เบอร์โทร</p>
+              <p className="font-medium text-sm sm:text-base">{quotation.customerPhone || '-'}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">อีเมล</p>
-              <p className="font-medium">{quotation.customerEmail || '-'}</p>
+              <p className="text-xs sm:text-sm text-gray-600">อีเมล</p>
+              <p className="font-medium text-sm sm:text-base break-all">{quotation.customerEmail || '-'}</p>
             </div>
           </CardContent>
         </Card>
 
         {/* Financial Status */}
         <Card>
-          <CardHeader>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Wallet className="w-5 h-5" />
+          <CardHeader className="pb-2 sm:pb-4">
+            <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+              <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
               สถานะการเงิน
             </h3>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-gray-600">ยอดรวมทั้งหมด</span>
-              <span className="font-bold">{quotation.grandTotal?.toLocaleString()} ฿</span>
+          <CardContent className="space-y-2 sm:space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs sm:text-sm text-gray-600">ยอดรวมทั้งหมด</span>
+              <span className="font-bold text-sm sm:text-base">{quotation.grandTotal?.toLocaleString()} ฿</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">ชำระแล้ว</span>
-              <span className="font-bold text-green-600">0 ฿</span>
+            <div className="flex justify-between items-center">
+              <span className="text-xs sm:text-sm text-gray-600">ชำระแล้ว</span>
+              <span className="font-bold text-sm sm:text-base text-green-600">0 ฿</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">คงเหลือ</span>
-              <span className="font-bold text-orange-600">{quotation.grandTotal?.toLocaleString()} ฿</span>
+            <div className="flex justify-between items-center">
+              <span className="text-xs sm:text-sm text-gray-600">คงเหลือ</span>
+              <span className="font-bold text-sm sm:text-base text-orange-600">{quotation.grandTotal?.toLocaleString()} ฿</span>
             </div>
           </CardContent>
         </Card>
@@ -288,33 +288,33 @@ function OverviewTab({ quotation }: { quotation: any }) {
 
       {/* Progress Status */}
       <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <ListChecks className="w-5 h-5" />
+        <CardHeader className="pb-2 sm:pb-4">
+          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+            <ListChecks className="w-4 h-4 sm:w-5 sm:h-5" />
             สถานะดำเนินการ
           </h3>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="flex flex-col items-center p-4 bg-green-50 rounded-lg border border-green-200">
-              <CheckCircle className="w-8 h-8 text-green-500 mb-2" />
-              <p className="text-sm text-center font-medium">ใบเสนอราคา</p>
-              <p className="text-xs text-green-600">เสร็จแล้ว</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+              <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-500 mb-1 sm:mb-2" />
+              <p className="text-xs sm:text-sm text-center font-medium">ใบเสนอราคา</p>
+              <p className="text-[10px] sm:text-xs text-green-600">เสร็จแล้ว</p>
             </div>
-            <div className="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <Clock className="w-8 h-8 text-gray-400 mb-2" />
-              <p className="text-sm text-center font-medium">ใบแจ้งหนี้</p>
-              <p className="text-xs text-gray-500">รอดำเนินการ</p>
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
+              <p className="text-xs sm:text-sm text-center font-medium">ใบแจ้งหนี้</p>
+              <p className="text-[10px] sm:text-xs text-gray-500">รอดำเนินการ</p>
             </div>
-            <div className="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <Clock className="w-8 h-8 text-gray-400 mb-2" />
-              <p className="text-sm text-center font-medium">การชำระเงิน</p>
-              <p className="text-xs text-gray-500">รอดำเนินการ</p>
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
+              <p className="text-xs sm:text-sm text-center font-medium">การชำระเงิน</p>
+              <p className="text-[10px] sm:text-xs text-gray-500">รอดำเนินการ</p>
             </div>
-            <div className="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <Clock className="w-8 h-8 text-gray-400 mb-2" />
-              <p className="text-sm text-center font-medium">เอกสารครบ</p>
-              <p className="text-xs text-gray-500">รอดำเนินการ</p>
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
+              <p className="text-xs sm:text-sm text-center font-medium">เอกสารครบ</p>
+              <p className="text-[10px] sm:text-xs text-gray-500">รอดำเนินการ</p>
             </div>
           </div>
         </CardContent>
@@ -392,17 +392,17 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Action Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Status */}
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-600">สถานะ:</span>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="text-xs sm:text-sm text-gray-600">สถานะ:</span>
           <select
             value={quotation.status}
             onChange={handleStatusChange}
             disabled={updating}
-            className={`px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${currentStatus.textColor} ${updating ? 'opacity-50 cursor-wait' : ''}`}
+            className={`px-2 sm:px-3 py-1.5 rounded-lg border border-gray-300 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${currentStatus.textColor} ${updating ? 'opacity-50 cursor-wait' : ''}`}
           >
             {statusOptions.map((status) => (
               <option key={status.value} value={status.value}>
@@ -410,39 +410,39 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
               </option>
             ))}
           </select>
-          {updating && <span className="text-sm text-gray-500">กำลังอัพเดท...</span>}
+          {updating && <span className="text-xs sm:text-sm text-gray-500">กำลังอัพเดท...</span>}
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Link href={`/quotations/${quotationId}`}>
-            <Button variant="outline" size="sm">
-              <Eye className="w-4 h-4 mr-2" />
-              ดูฉบับเต็ม
+            <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+              <Eye className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">ดูฉบับเต็ม</span>
             </Button>
           </Link>
           <Link href={`/quotations/${quotationId}/edit`}>
-            <Button variant="outline" size="sm">
-              <Pencil className="w-4 h-4 mr-2" />
-              แก้ไข
+            <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+              <Pencil className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">แก้ไข</span>
             </Button>
           </Link>
-          <Button variant="outline" size="sm">
-            <Download className="w-4 h-4 mr-2" />
-            PDF
+          <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">PDF</span>
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Left: Customer & Tour Info */}
         <div className="lg:col-span-1 space-y-4">
           {/* Customer */}
           <Card>
-            <CardHeader className="pb-3">
-              <h4 className="font-semibold text-purple-700">ข้อมูลลูกค้า</h4>
+            <CardHeader className="pb-2 sm:pb-3">
+              <h4 className="font-semibold text-purple-700 text-sm sm:text-base">ข้อมูลลูกค้า</h4>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
               <div>
                 <span className="text-gray-500">ชื่อ:</span>
                 <span className="ml-2 font-medium">{quotation.customerName}</span>
@@ -456,7 +456,7 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
               {quotation.customerEmail && (
                 <div>
                   <span className="text-gray-500">อีเมล:</span>
-                  <span className="ml-2">{quotation.customerEmail}</span>
+                  <span className="ml-2 break-all">{quotation.customerEmail}</span>
                 </div>
               )}
               {quotation.customerTaxId && (
@@ -470,10 +470,10 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
 
           {/* Tour Info */}
           <Card>
-            <CardHeader className="pb-3">
-              <h4 className="font-semibold text-purple-700">ข้อมูลทัวร์</h4>
+            <CardHeader className="pb-2 sm:pb-3">
+              <h4 className="font-semibold text-purple-700 text-sm sm:text-base">ข้อมูลทัวร์</h4>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
               <div>
                 <span className="text-gray-500">แพ็คเกจ:</span>
                 <span className="ml-2 font-medium">{quotation.tourName}</span>
@@ -509,37 +509,37 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
         {/* Right: Items Table */}
         <div className="lg:col-span-2">
           <Card>
-            <CardHeader className="pb-3">
-              <h4 className="font-semibold text-purple-700">รายการสินค้า/บริการ</h4>
+            <CardHeader className="pb-2 sm:pb-3">
+              <h4 className="font-semibold text-purple-700 text-sm sm:text-base">รายการสินค้า/บริการ</h4>
             </CardHeader>
-            <CardContent className="p-0">
-              <table className="w-full text-sm">
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm min-w-[400px]">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left py-2 px-4 font-medium">#</th>
-                    <th className="text-left py-2 px-4 font-medium">รายการ</th>
-                    <th className="text-center py-2 px-4 font-medium">จำนวน</th>
-                    <th className="text-right py-2 px-4 font-medium">ราคา</th>
-                    <th className="text-right py-2 px-4 font-medium">รวม</th>
+                    <th className="text-left py-2 px-2 sm:px-4 font-medium">#</th>
+                    <th className="text-left py-2 px-2 sm:px-4 font-medium">รายการ</th>
+                    <th className="text-center py-2 px-2 sm:px-4 font-medium">จำนวน</th>
+                    <th className="text-right py-2 px-2 sm:px-4 font-medium">ราคา</th>
+                    <th className="text-right py-2 px-2 sm:px-4 font-medium">รวม</th>
                   </tr>
                 </thead>
                 <tbody>
                   {quotation.items?.map((item: any, index: number) => (
                     <tr key={item.id} className="border-t">
-                      <td className="py-2 px-4 text-gray-500">{index + 1}</td>
-                      <td className="py-2 px-4">
+                      <td className="py-2 px-2 sm:px-4 text-gray-500">{index + 1}</td>
+                      <td className="py-2 px-2 sm:px-4">
                         <span className="font-medium">{item.productName}</span>
                         {item.itemType !== 'INCOME' && (
-                          <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${
+                          <span className={`ml-1 sm:ml-2 text-xs px-1 sm:px-1.5 py-0.5 rounded ${
                             item.itemType === 'DISCOUNT' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
                           }`}>
                             {item.itemType === 'DISCOUNT' ? 'ส่วนลด' : 'ฟรี'}
                           </span>
                         )}
                       </td>
-                      <td className="py-2 px-4 text-center">{item.quantity}</td>
-                      <td className="py-2 px-4 text-right">{formatNumber(item.unitPrice)}</td>
-                      <td className="py-2 px-4 text-right font-medium">
+                      <td className="py-2 px-2 sm:px-4 text-center">{item.quantity}</td>
+                      <td className="py-2 px-2 sm:px-4 text-right">{formatNumber(item.unitPrice)}</td>
+                      <td className="py-2 px-2 sm:px-4 text-right font-medium">
                         {item.itemType === 'DISCOUNT' ? '-' : ''}{formatNumber(item.amount)}
                       </td>
                     </tr>
@@ -547,24 +547,24 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
                 </tbody>
                 <tfoot className="border-t-2 bg-gray-50">
                   <tr>
-                    <td colSpan={4} className="py-2 px-4 text-right text-gray-600">ยอดรวมก่อนส่วนลด</td>
-                    <td className="py-2 px-4 text-right">{formatNumber(quotation.subtotal)}</td>
+                    <td colSpan={4} className="py-2 px-2 sm:px-4 text-right text-gray-600">ยอดรวมก่อนส่วนลด</td>
+                    <td className="py-2 px-2 sm:px-4 text-right">{formatNumber(quotation.subtotal)}</td>
                   </tr>
                   {quotation.discountAmount > 0 && (
                     <tr>
-                      <td colSpan={4} className="py-1 px-4 text-right text-gray-600">ส่วนลด</td>
-                      <td className="py-1 px-4 text-right text-red-600">-{formatNumber(quotation.discountAmount)}</td>
+                      <td colSpan={4} className="py-1 px-2 sm:px-4 text-right text-gray-600">ส่วนลด</td>
+                      <td className="py-1 px-2 sm:px-4 text-right text-red-600">-{formatNumber(quotation.discountAmount)}</td>
                     </tr>
                   )}
                   <tr>
-                    <td colSpan={4} className="py-1 px-4 text-right text-gray-600">VAT (7%)</td>
-                    <td className="py-1 px-4 text-right">{formatNumber(quotation.vatAmount)}</td>
+                    <td colSpan={4} className="py-1 px-2 sm:px-4 text-right text-gray-600">VAT (7%)</td>
+                    <td className="py-1 px-2 sm:px-4 text-right">{formatNumber(quotation.vatAmount)}</td>
                   </tr>
                   <tr className="bg-blue-50">
-                    <td colSpan={4} className="py-3 px-4 text-right font-semibold">ยอดรวมทั้งหมด</td>
-                    <td className="py-3 px-4 text-right">
-                      <span className="text-xl font-bold text-blue-600">{formatNumber(quotation.grandTotal)}</span>
-                      <span className="text-sm text-gray-500 ml-1">บาท</span>
+                    <td colSpan={4} className="py-2 sm:py-3 px-2 sm:px-4 text-right font-semibold text-xs sm:text-sm">ยอดรวมทั้งหมด</td>
+                    <td className="py-2 sm:py-3 px-2 sm:px-4 text-right">
+                      <span className="text-base sm:text-xl font-bold text-blue-600">{formatNumber(quotation.grandTotal)}</span>
+                      <span className="text-xs sm:text-sm text-gray-500 ml-1">บาท</span>
                     </td>
                   </tr>
                 </tfoot>
@@ -575,16 +575,16 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
           {/* Payment Info */}
           <Card className="mt-4">
             <CardContent className="pt-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
+                <div className="p-2 sm:p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                   <p className="text-gray-600 text-xs">กำหนดชำระมัดจำ</p>
-                  <p className="font-medium">{formatDate(quotation.depositDueDate)}</p>
-                  <p className="text-lg font-bold text-yellow-700">{formatNumber(quotation.depositAmount)} ฿</p>
+                  <p className="font-medium text-xs sm:text-sm">{formatDate(quotation.depositDueDate)}</p>
+                  <p className="text-base sm:text-lg font-bold text-yellow-700">{formatNumber(quotation.depositAmount)} ฿</p>
                 </div>
-                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                <div className="p-2 sm:p-3 bg-green-50 rounded-lg border border-green-200">
                   <p className="text-gray-600 text-xs">กำหนดชำระเต็มจำนวน</p>
-                  <p className="font-medium">{formatDate(quotation.fullPaymentDueDate)}</p>
-                  <p className="text-lg font-bold text-green-700">{formatNumber(quotation.fullPaymentAmount)} ฿</p>
+                  <p className="font-medium text-xs sm:text-sm">{formatDate(quotation.fullPaymentDueDate)}</p>
+                  <p className="text-base sm:text-lg font-bold text-green-700">{formatNumber(quotation.fullPaymentAmount)} ฿</p>
                 </div>
               </div>
             </CardContent>
@@ -596,10 +596,10 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
       {quotation.notes && (
         <Card>
           <CardHeader className="pb-2">
-            <h4 className="font-semibold text-purple-700">หมายเหตุ</h4>
+            <h4 className="font-semibold text-purple-700 text-sm sm:text-base">หมายเหตุ</h4>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{quotation.notes}</p>
+            <p className="text-xs sm:text-sm text-gray-700 whitespace-pre-wrap">{quotation.notes}</p>
           </CardContent>
         </Card>
       )}
@@ -784,59 +784,59 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
-              <p className="text-sm text-gray-600 mb-1">ยอดรวมทั้งหมด</p>
-              <p className="text-2xl font-bold text-blue-600">{parseFloat(quotation.grandTotal || 0).toLocaleString()} ฿</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ยอดรวมทั้งหมด</p>
+              <p className="text-lg sm:text-2xl font-bold text-blue-600">{parseFloat(quotation.grandTotal || 0).toLocaleString()} ฿</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
-              <p className="text-sm text-gray-600 mb-1">ออกใบแจ้งหนี้แล้ว</p>
-              <p className="text-2xl font-bold text-green-600">{totalInvoiced.toLocaleString()} ฿</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ออกใบแจ้งหนี้แล้ว</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600">{totalInvoiced.toLocaleString()} ฿</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
-              <p className="text-sm text-gray-600 mb-1">ชำระเงินแล้ว</p>
-              <p className="text-2xl font-bold text-emerald-600">{totalPaid.toLocaleString()} ฿</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ชำระเงินแล้ว</p>
+              <p className="text-lg sm:text-2xl font-bold text-emerald-600">{totalPaid.toLocaleString()} ฿</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
-              <p className="text-sm text-gray-600 mb-1">คงเหลือ</p>
-              <p className="text-2xl font-bold text-orange-600">{remaining.toLocaleString()} ฿</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">คงเหลือ</p>
+              <p className="text-lg sm:text-2xl font-bold text-orange-600">{remaining.toLocaleString()} ฿</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Document Type Sub-tabs */}
-      <div className="flex gap-2 border-b pb-2 border-gray-300">
+      <div className="flex gap-1 sm:gap-2 border-b pb-2 border-gray-300 overflow-x-auto">
         {docTypes.map((doc) => {
           const Icon = doc.icon;
           return (
             <button
               key={doc.id}
               onClick={() => setActiveDocType(doc.id as any)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-t-lg font-medium text-sm transition-colors ${
+              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-t-lg font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
                 activeDocType === doc.id
                   ? `bg-${doc.color}-50 text-${doc.color}-700 border-b-2 border-${doc.color}-500`
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
               <Icon className="w-4 h-4" />
-              {doc.label}
+              <span className="hidden xs:inline sm:inline">{doc.label}</span>
             </button>
           );
         })}
@@ -846,8 +846,8 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
       {activeDocType === 'invoice' && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
                 <FileText className="w-5 h-5 text-blue-600" />
                 ใบแจ้งหนี้ (Invoice)
               </h3>
@@ -856,9 +856,10 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
                 onClick={onCreateInvoice}
                 disabled={isFullyInvoiced}
                 title={isFullyInvoiced ? 'ออกใบแจ้งหนี้ครบตามยอดใบเสนอราคาแล้ว' : ''}
+                className="text-xs sm:text-sm"
               >
-                <Plus className="w-4 h-4 mr-2" />
-                {isFullyInvoiced ? 'ออกใบแจ้งหนี้ครบแล้ว' : 'สร้างใบแจ้งหนี้'}
+                <Plus className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">{isFullyInvoiced ? 'ออกใบแจ้งหนี้ครบแล้ว' : 'สร้างใบแจ้งหนี้'}</span>
               </Button>
             </div>
           </CardHeader>
@@ -866,18 +867,75 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
             {loadingInvoices ? (
               <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
             ) : invoices.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p className="font-medium">ยังไม่มีใบแจ้งหนี้</p>
-                <p className="text-sm mt-1">คลิกปุ่ม "สร้างใบแจ้งหนี้" เพื่อเริ่มต้น</p>
-                <Button size="sm" className="mt-4" onClick={onCreateInvoice}>
-                  <Plus className="w-4 h-4 mr-2" />
+              <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+                <FileText className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+                <p className="font-medium text-sm sm:text-base">ยังไม่มีใบแจ้งหนี้</p>
+                <p className="text-xs sm:text-sm mt-1">คลิกปุ่ม "สร้างใบแจ้งหนี้" เพื่อเริ่มต้น</p>
+                <Button size="sm" className="mt-4 text-xs sm:text-sm" onClick={onCreateInvoice}>
+                  <Plus className="w-4 h-4 mr-1 sm:mr-2" />
                   สร้างใบแจ้งหนี้
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text">
+              <>
+                {/* Mobile Card View */}
+                <div className="block lg:hidden space-y-3">
+                  {invoices.map((invoice) => (
+                    <div key={invoice.id} className="border rounded-lg p-3 bg-white shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-blue-600 text-sm">{invoice.invoiceNumber}</span>
+                        {getStatusSelect(invoice)}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
+                        <div>
+                          <span className="text-gray-400">วันที่:</span>
+                          <span className="ml-1">{formatDate(invoice.invoiceDate)}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">กำหนดชำระ:</span>
+                          <span className="ml-1">{formatDate(invoice.dueDate)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between border-t pt-2">
+                        <span className="font-bold text-base">{parseFloat(invoice.grandTotal || 0).toLocaleString()} ฿</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                            onClick={() => window.open(`/invoices/${invoice.id}`, '_blank')}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded"
+                            onClick={() => window.open(`/invoices/${invoice.id}/edit`, '_blank')}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          {invoice.status !== 'CANCELLED' && invoice.status !== 'VOIDED' && (
+                            <button
+                              className="p-1.5 text-orange-600 hover:bg-orange-50 rounded"
+                              onClick={() => handleCancelInvoice(invoice.id, invoice.invoiceNumber)}
+                              disabled={deletingInvoiceId === invoice.id}
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                            onClick={() => handleHardDeleteInvoice(invoice.id, invoice.invoiceNumber)}
+                            disabled={hardDeletingInvoiceId === invoice.id}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="text-left py-3 px-4 font-medium">เลขที่</th>
@@ -947,7 +1005,8 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
                     ))}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -957,27 +1016,27 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
       {activeDocType === 'receipt' && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-green-600" />
                 ใบเสร็จรับเงิน (Receipt)
               </h3>
-              <Button size="sm" disabled>
-                <Plus className="w-4 h-4 mr-2" />
-                สร้างใบเสร็จ
+              <Button size="sm" disabled className="text-xs sm:text-sm">
+                <Plus className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">สร้างใบเสร็จ</span>
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-yellow-700">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4 mb-4">
+              <p className="text-xs sm:text-sm text-yellow-700">
                 <strong>หมายเหตุ:</strong> ใบเสร็จรับเงินต้องสร้างจากใบแจ้งหนี้ที่มีอยู่แล้ว
               </p>
             </div>
-            <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-              <Receipt className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="font-medium">ยังไม่มีใบเสร็จรับเงิน</p>
-              <p className="text-sm mt-1">สร้างใบแจ้งหนี้ก่อน แล้วค่อยออกใบเสร็จ</p>
+            <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <Receipt className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium text-sm sm:text-base">ยังไม่มีใบเสร็จรับเงิน</p>
+              <p className="text-xs sm:text-sm mt-1">สร้างใบแจ้งหนี้ก่อน แล้วค่อยออกใบเสร็จ</p>
             </div>
           </CardContent>
         </Card>
@@ -987,27 +1046,27 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
       {activeDocType === 'taxInvoice' && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
                 <FileCheck className="w-5 h-5 text-purple-600" />
                 ใบกำกับภาษี (Tax Invoice)
               </h3>
-              <Button size="sm" disabled>
-                <Plus className="w-4 h-4 mr-2" />
-                สร้างใบกำกับภาษี
+              <Button size="sm" disabled className="text-xs sm:text-sm">
+                <Plus className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">สร้างใบกำกับภาษี</span>
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-yellow-700">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4 mb-4">
+              <p className="text-xs sm:text-sm text-yellow-700">
                 <strong>หมายเหตุ:</strong> ใบกำกับภาษีต้องสร้างจากใบแจ้งหนี้ที่มีอยู่แล้ว
               </p>
             </div>
-            <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-              <FileCheck className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="font-medium">ยังไม่มีใบกำกับภาษี</p>
-              <p className="text-sm mt-1">สร้างใบแจ้งหนี้ก่อน แล้วค่อยออกใบกำกับภาษี</p>
+            <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <FileCheck className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium text-sm sm:text-base">ยังไม่มีใบกำกับภาษี</p>
+              <p className="text-xs sm:text-sm mt-1">สร้างใบแจ้งหนี้ก่อน แล้วค่อยออกใบกำกับภาษี</p>
             </div>
           </CardContent>
         </Card>
@@ -1020,37 +1079,37 @@ function CustomerPaymentTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
             <Wallet className="w-5 h-5" />
             ระบบจัดการการชำระเงินลูกค้า
           </h3>
-          <Button size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            บันทึกการชำระเงิน
+          <Button size="sm" className="text-xs sm:text-sm">
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">บันทึกการชำระเงิน</span>
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-gray-600 mb-1">ยอดทั้งหมด</p>
-              <p className="text-2xl font-bold text-blue-600">0 ฿</p>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ยอดทั้งหมด</p>
+              <p className="text-lg sm:text-2xl font-bold text-blue-600">0 ฿</p>
             </div>
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-              <p className="text-sm text-gray-600 mb-1">ชำระแล้ว</p>
-              <p className="text-2xl font-bold text-green-600">0 ฿</p>
+            <div className="p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ชำระแล้ว</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600">0 ฿</p>
             </div>
-            <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-              <p className="text-sm text-gray-600 mb-1">คงเหลือ</p>
-              <p className="text-2xl font-bold text-orange-600">0 ฿</p>
+            <div className="p-3 sm:p-4 bg-orange-50 rounded-lg border border-orange-200 col-span-2 lg:col-span-1">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">คงเหลือ</p>
+              <p className="text-lg sm:text-2xl font-bold text-orange-600">0 ฿</p>
             </div>
           </div>
-          <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-            <Wallet className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="font-medium">ยังไม่มีรายการชำระเงิน</p>
-            <p className="text-sm mt-1">Module นี้พร้อมรอการพัฒนา</p>
+          <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+            <Wallet className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+            <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการชำระเงิน</p>
+            <p className="text-xs sm:text-sm mt-1">Module นี้พร้อมรอการพัฒนา</p>
           </div>
         </div>
       </CardContent>
@@ -1062,22 +1121,22 @@ function WholesalePaymentTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
             <ShoppingCart className="w-5 h-5" />
             ระบบจัดการการชำระเงินให้ Wholesale
           </h3>
-          <Button size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            บันทึกการชำระ
+          <Button size="sm" className="text-xs sm:text-sm">
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">บันทึกการชำระ</span>
           </Button>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
-          <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <p className="font-medium">ยังไม่มีรายการชำระเงินให้ Wholesale</p>
-          <p className="text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
+        <div className="text-center py-8 sm:py-12 text-gray-500 bg-gray-50 rounded-lg">
+          <ShoppingCart className="w-12 sm:w-16 h-12 sm:h-16 mx-auto mb-4 text-gray-300" />
+          <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการชำระเงินให้ Wholesale</p>
+          <p className="text-xs sm:text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
         </div>
       </CardContent>
     </Card>
@@ -1088,22 +1147,22 @@ function TaxTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
             <FileCheck className="w-5 h-5" />
             ระบบจัดการภาษีซื้อ
           </h3>
-          <Button size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            เพิ่มใบกำกับภาษี
+          <Button size="sm" className="text-xs sm:text-sm">
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">เพิ่มใบกำกับภาษี</span>
           </Button>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
-          <FileCheck className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <p className="font-medium">ยังไม่มีใบกำกับภาษีซื้อ</p>
-          <p className="text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
+        <div className="text-center py-8 sm:py-12 text-gray-500 bg-gray-50 rounded-lg">
+          <FileCheck className="w-12 sm:w-16 h-12 sm:h-16 mx-auto mb-4 text-gray-300" />
+          <p className="font-medium text-sm sm:text-base">ยังไม่มีใบกำกับภาษีซื้อ</p>
+          <p className="text-xs sm:text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
         </div>
       </CardContent>
     </Card>
@@ -1114,29 +1173,29 @@ function CostTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
             <DollarSign className="w-5 h-5" />
             ระบบจัดการต้นทุน
           </h3>
-          <Button size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            เพิ่มรายการต้นทุน
+          <Button size="sm" className="text-xs sm:text-sm">
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">เพิ่มรายการต้นทุน</span>
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+          <div className="p-3 sm:p-4 bg-purple-50 rounded-lg border border-purple-200">
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">ต้นทุนทั้งหมด</span>
-              <span className="text-2xl font-bold text-purple-600">0 ฿</span>
+              <span className="text-gray-600 text-xs sm:text-sm">ต้นทุนทั้งหมด</span>
+              <span className="text-lg sm:text-2xl font-bold text-purple-600">0 ฿</span>
             </div>
           </div>
-          <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-            <DollarSign className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="font-medium">ยังไม่มีรายการต้นทุน</p>
-            <p className="text-sm mt-1">Module นี้พร้อมรอการพัฒนา</p>
+          <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+            <DollarSign className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+            <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการต้นทุน</p>
+            <p className="text-xs sm:text-sm mt-1">Module นี้พร้อมรอการพัฒนา</p>
           </div>
         </div>
       </CardContent>
@@ -1148,45 +1207,45 @@ function DocumentsTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
             <Upload className="w-5 h-5" />
             ระบบจัดเก็บเอกสาร
           </h3>
-          <Button size="sm">
-            <Upload className="w-4 h-4 mr-2" />
-            อัปโหลดเอกสาร
+          <Button size="sm" className="text-xs sm:text-sm">
+            <Upload className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">อัปโหลดเอกสาร</span>
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
-              <FileText className="w-8 h-8 mx-auto mb-2 text-blue-600" />
-              <p className="text-sm font-medium">Passport</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+            <div className="p-2 sm:p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
+              <FileText className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-blue-600" />
+              <p className="text-xs sm:text-sm font-medium">Passport</p>
               <p className="text-xs text-gray-500">0 ไฟล์</p>
             </div>
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200 text-center">
-              <FileText className="w-8 h-8 mx-auto mb-2 text-green-600" />
-              <p className="text-sm font-medium">Visa</p>
+            <div className="p-2 sm:p-4 bg-green-50 rounded-lg border border-green-200 text-center">
+              <FileText className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-green-600" />
+              <p className="text-xs sm:text-sm font-medium">Visa</p>
               <p className="text-xs text-gray-500">0 ไฟล์</p>
             </div>
-            <div className="p-4 bg-purple-50 rounded-lg border border-purple-200 text-center">
-              <FileText className="w-8 h-8 mx-auto mb-2 text-purple-600" />
-              <p className="text-sm font-medium">ใบแจ้งหนี้</p>
+            <div className="p-2 sm:p-4 bg-purple-50 rounded-lg border border-purple-200 text-center">
+              <FileText className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-purple-600" />
+              <p className="text-xs sm:text-sm font-medium">ใบแจ้งหนี้</p>
               <p className="text-xs text-gray-500">0 ไฟล์</p>
             </div>
-            <div className="p-4 bg-orange-50 rounded-lg border border-orange-200 text-center">
-              <FileText className="w-8 h-8 mx-auto mb-2 text-orange-600" />
-              <p className="text-sm font-medium">อื่นๆ</p>
+            <div className="p-2 sm:p-4 bg-orange-50 rounded-lg border border-orange-200 text-center">
+              <FileText className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-orange-600" />
+              <p className="text-xs sm:text-sm font-medium">อื่นๆ</p>
               <p className="text-xs text-gray-500">0 ไฟล์</p>
             </div>
           </div>
-          <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-            <Upload className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <p className="font-medium">ยังไม่มีเอกสาร</p>
-            <p className="text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
+          <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+            <Upload className="w-12 sm:w-16 h-12 sm:h-16 mx-auto mb-4 text-gray-300" />
+            <p className="font-medium text-sm sm:text-base">ยังไม่มีเอกสาร</p>
+            <p className="text-xs sm:text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
           </div>
         </div>
       </CardContent>
@@ -1198,33 +1257,33 @@ function WholesaleCostTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
             <PackageCheck className="w-5 h-5" />
             รายการต้นทุนโฮลเซลล์
           </h3>
-          <Button size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            เพิ่มรายการ
+          <Button size="sm" className="text-xs sm:text-sm">
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">เพิ่มรายการ</span>
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <p className="text-sm text-gray-600 mb-1">ต้นทุนโฮลเซลล์</p>
-              <p className="text-2xl font-bold text-purple-600">0 ฿</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="p-3 sm:p-4 bg-purple-50 rounded-lg border border-purple-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ต้นทุนโฮลเซลล์</p>
+              <p className="text-lg sm:text-2xl font-bold text-purple-600">0 ฿</p>
             </div>
-            <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
-              <p className="text-sm text-gray-600 mb-1">ค่าใช้จ่ายอื่นๆ</p>
-              <p className="text-2xl font-bold text-indigo-600">0 ฿</p>
+            <div className="p-3 sm:p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ค่าใช้จ่ายอื่นๆ</p>
+              <p className="text-lg sm:text-2xl font-bold text-indigo-600">0 ฿</p>
             </div>
           </div>
-          <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-            <PackageCheck className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="font-medium">ยังไม่มีรายการต้นทุนโฮลเซลล์</p>
-            <p className="text-sm mt-1">Module นี้พร้อมรอการพัฒนา</p>
+          <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+            <PackageCheck className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+            <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการต้นทุนโฮลเซลล์</p>
+            <p className="text-xs sm:text-sm mt-1">Module นี้พร้อมรอการพัฒนา</p>
           </div>
         </div>
       </CardContent>
@@ -1236,29 +1295,29 @@ function ProfitTab() {
   return (
     <Card>
       <CardHeader>
-        <h3 className="text-lg font-semibold flex items-center gap-2">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
           <TrendingUp className="w-5 h-5" />
           สรุปกำไร-ขาดทุน
         </h3>
       </CardHeader>
       <CardContent>
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-6 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-gray-600 mb-1">รายได้รวม</p>
-              <p className="text-3xl font-bold text-blue-600">0 ฿</p>
+        <div className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            <div className="p-3 sm:p-6 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">รายได้รวม</p>
+              <p className="text-xl sm:text-3xl font-bold text-blue-600">0 ฿</p>
             </div>
-            <div className="p-6 bg-orange-50 rounded-lg border border-orange-200">
-              <p className="text-sm text-gray-600 mb-1">ต้นทุนรวม</p>
-              <p className="text-3xl font-bold text-orange-600">0 ฿</p>
+            <div className="p-3 sm:p-6 bg-orange-50 rounded-lg border border-orange-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ต้นทุนรวม</p>
+              <p className="text-xl sm:text-3xl font-bold text-orange-600">0 ฿</p>
             </div>
-            <div className="p-6 bg-green-50 rounded-lg border border-green-200">
-              <p className="text-sm text-gray-600 mb-1">กำไรสุทธิ</p>
-              <p className="text-3xl font-bold text-green-600">0 ฿</p>
+            <div className="p-3 sm:p-6 bg-green-50 rounded-lg border border-green-200 col-span-2 lg:col-span-1">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">กำไรสุทธิ</p>
+              <p className="text-xl sm:text-3xl font-bold text-green-600">0 ฿</p>
             </div>
           </div>
 
-          <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
+          <div className="space-y-2 sm:space-y-3 bg-gray-50 p-3 sm:p-4 rounded-lg text-xs sm:text-sm">
             <div className="flex justify-between py-2 border-b border-gray-200">
               <span className="text-gray-600">รายได้จากลูกค้า</span>
               <span className="font-medium">0 ฿</span>
@@ -1271,14 +1330,14 @@ function ProfitTab() {
               <span className="text-gray-600">- ค่าใช้จ่ายอื่นๆ</span>
               <span className="font-medium">0 ฿</span>
             </div>
-            <div className="flex justify-between py-3 border-t-2 border-gray-400">
-              <span className="font-semibold text-lg">= กำไรสุทธิ</span>
-              <span className="font-bold text-lg text-green-600">0 ฿</span>
+            <div className="flex justify-between py-2 sm:py-3 border-t-2 border-gray-400">
+              <span className="font-semibold text-sm sm:text-lg">= กำไรสุทธิ</span>
+              <span className="font-bold text-sm sm:text-lg text-green-600">0 ฿</span>
             </div>
           </div>
 
           <div className="text-center py-4 text-gray-500">
-            <p className="text-sm">Module นี้พร้อมรอการพัฒนา</p>
+            <p className="text-xs sm:text-sm">Module นี้พร้อมรอการพัฒนา</p>
           </div>
         </div>
       </CardContent>
@@ -1303,17 +1362,17 @@ function ChecklistTab() {
   return (
     <Card>
       <CardHeader>
-        <h3 className="text-lg font-semibold flex items-center gap-2">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
           <ListChecks className="w-5 h-5" />
           เช็คลิสต์การดำเนินการ
         </h3>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {checklist.map((item) => (
             <div 
               key={item.id} 
-              className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 border rounded-lg hover:bg-gray-50 transition-colors"
             >
               <input
                 type="checkbox"
@@ -1323,32 +1382,32 @@ function ChecklistTab() {
                     i.id === item.id ? { ...i, checked: !i.checked } : i
                   ));
                 }}
-                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                className="w-4 sm:w-5 h-4 sm:h-5 text-blue-600 rounded focus:ring-blue-500"
               />
-              <label className={`flex-1 cursor-pointer ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+              <label className={`flex-1 cursor-pointer text-xs sm:text-sm ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
                 {item.label}
               </label>
-              {item.checked && <CheckCircle className="w-5 h-5 text-green-500" />}
+              {item.checked && <CheckCircle className="w-4 sm:w-5 h-4 sm:h-5 text-green-500" />}
             </div>
           ))}
         </div>
         
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-700 font-medium">ความคืบหน้า</span>
-            <span className="font-bold text-blue-600">
+            <span className="text-gray-700 font-medium text-xs sm:text-sm">ความคืบหน้า</span>
+            <span className="font-bold text-blue-600 text-xs sm:text-sm">
               {checklist.filter(i => i.checked).length} / {checklist.length}
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-3">
+          <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3">
             <div 
-              className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+              className="bg-blue-600 h-2 sm:h-3 rounded-full transition-all duration-300"
               style={{ width: `${(checklist.filter(i => i.checked).length / checklist.length) * 100}%` }}
             />
           </div>
         </div>
 
-        <div className="mt-4 text-center text-sm text-gray-500">
+        <div className="mt-4 text-center text-xs sm:text-sm text-gray-500">
           <p>Module นี้พร้อมใช้งาน - สามารถบันทึกสถานะได้เมื่อเชื่อมต่อ API</p>
         </div>
       </CardContent>

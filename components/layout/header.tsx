@@ -64,17 +64,27 @@ export function Header({ onMenuClick }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6">
+    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
       {/* Mobile Menu Button */}
-      <button
-        onClick={onMenuClick}
-        className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
+      <div className="flex items-center gap-4">
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+
+        {/* Mobile Logo - shown only on mobile when sidebar is closed */}
+        <div className="lg:hidden flex items-center gap-2">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-sm">NT</span>
+          </div>
+          <span className="font-semibold text-gray-900 text-sm sm:text-base">NextTrip</span>
+        </div>
+      </div>
 
       {/* Search */}
-      <div className="flex-1 max-w-md hidden md:block">
+      <div className="flex-1 max-w-md mx-4 hidden sm:block">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -86,7 +96,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       {/* Right Section */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         {/* Notifications */}
         <div className="relative">
           <button
@@ -98,7 +108,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
+            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
               <div className="px-4 py-2 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900">การแจ้งเตือน</h3>
               </div>
@@ -142,10 +152,10 @@ export function Header({ onMenuClick }: HeaderProps) {
           </button>
 
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
+            <div className="absolute right-0 mt-2 w-48 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
               <div className="px-4 py-3 border-b border-gray-100">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
+                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                 {user?.profileCode && (
                   <p className="text-xs text-blue-600 mt-1">Role: {user.profileCode}</p>
                 )}
