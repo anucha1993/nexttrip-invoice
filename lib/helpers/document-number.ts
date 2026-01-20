@@ -104,10 +104,10 @@ export async function isDocumentNumberExists(
       break;
   }
   
-  const [rows] = await conn.query<any[]>(
+  const rows = await conn.query(
     `SELECT COUNT(*) as count FROM ${tableName} WHERE ${columnName} = ?`,
     [documentNumber]
-  );
+  ) as any[];
   
   return rows[0].count > 0;
 }
