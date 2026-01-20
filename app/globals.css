@@ -23,6 +23,13 @@ body {
   color: var(--foreground);
 }
 
+/* Default border color */
+*,
+*::before,
+*::after {
+  border-color: #d1d5db; /* gray-300 */
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

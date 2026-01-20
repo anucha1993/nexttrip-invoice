@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import db2 from '@/lib/db2';
 
 // GET - Get single quotation by ID
 export async function GET(
@@ -14,7 +15,16 @@ export async function GET(
     // Get quotation
     const quotations = await conn.query(
       `SELECT 
-        q.*,
+        q.id, q.quotationNumber, q.customerId, q.tourName, q.bookingCode, 
+        q.ntCode, q.customTourCode, q.countryId, q.airlineId, q.wholesaleId,
+        q.departureDate, q.returnDate, q.numDays, q.paxCount, q.saleId,
+        q.quotationDate, q.validUntil, q.depositDueDate, 
+        q.depositAmount, q.fullPaymentDueDate, q.fullPaymentAmount,
+        q.subtotal, q.discountAmount, q.vatExemptAmount, q.preTaxAmount, 
+        q.vatAmount, q.grandTotal, q.withholdingTax, q.hasWithholdingTax, 
+        q.noCost, q.commission, q.commissionNote, q.status, q.paymentStatus, 
+        q.notes, q.createdById, q.vatMode, q.preVatAmount, q.includeVatAmount, 
+        q.netPayable, q.createdAt, q.updatedAt,
         c.code as customerCode,
         c.name as customerName,
         c.taxId as customerTaxId,
@@ -36,6 +46,18 @@ export async function GET(
       );
     }
 
+    const quotation = quotations[0];
+    
+    // Force noCost to be included
+    if (!('noCost' in quotation)) {
+      console.error('❌ noCost field missing from query result!');
+      quotation.noCost = 0;
+    }
+    
+    // console.log('🔍 API GET /quotations/[id]');
+    // console.log('   quotation keys:', Object.keys(quotation));
+    // console.log('   noCost value:', quotation.noCost, 'type:', typeof quotation.noCost);
+
     // Get items
     const items = await conn.query(
       `SELECT 
@@ -50,10 +72,42 @@ export async function GET(
       [id]
     );
 
-    return NextResponse.json({
-      ...quotations[0],
+    // Get sale name from DB2 if saleId exists
+    let saleName = null;
+    if (quotation.saleId) {
+      try {
+        const saleUsers = await db2.query(
+          `SELECT name FROM users WHERE id = ?`,
+          [quotation.saleId]
+        );
+        if (saleUsers && saleUsers.length > 0) {
+          saleName = saleUsers[0].name;
+        }
+      } catch (err) {
+        console.error('Error fetching sale name from DB2:', err);
+      }
+    }
+
+    // Calculate invoiced amount (exclude CANCELLED/VOIDED invoices)
+    const invoicedResult = await conn.query(
+      `SELECT COALESCE(SUM(grandTotal), 0) as totalInvoiced
+       FROM invoices
+       WHERE quotationId = ? AND status NOT IN ('CANCELLED', 'VOIDED')`,
+      [id]
+    );
+    const totalInvoiced = parseFloat(invoicedResult[0]?.totalInvoiced || 0);
+    const remainingAmount = parseFloat(quotation.grandTotal || 0) - totalInvoiced;
+
+    const result = {
+      ...quotation,
+      saleName,
       items,
-    });
+      totalInvoiced,
+      remainingAmount,
+    };
+    console.log('📤 API Response - noCost:', result.noCost, 'hasWithholdingTax:', result.hasWithholdingTax);
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching quotation:', error);
     console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
@@ -118,6 +172,7 @@ export async function PUT(
         status = ?,
         paymentStatus = ?,
         notes = ?,
+        noCost = ?,
         updatedAt = NOW()
       WHERE id = ?`,
       [
@@ -150,9 +205,10 @@ export async function PUT(
         body.hasWithholdingTax || false,
         body.commission || 0,
         body.commissionNote || null,
-        body.status || 'DRAFT',
+        body.status || 'NEW',
         body.paymentStatus || 'UNPAID',
         body.notes || null,
+        body.noCost || false,
         id,
       ]
     );
@@ -190,6 +246,57 @@ export async function PUT(
     console.error('Error updating quotation:', error);
     return NextResponse.json(
       { error: 'Failed to update quotation' },
+      { status: 500 }
+    );
+  } finally {
+    if (conn) conn.release();
+  }
+}
+
+// PATCH - Partial update (status only)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  let conn;
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    conn = await pool.getConnection();
+
+    // Build dynamic update query
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (body.status !== undefined) {
+      updates.push('status = ?');
+      values.push(body.status);
+    }
+    if (body.paymentStatus !== undefined) {
+      updates.push('paymentStatus = ?');
+      values.push(body.paymentStatus);
+    }
+
+    if (updates.length === 0) {
+      return NextResponse.json(
+        { error: 'No fields to update' },
+        { status: 400 }
+      );
+    }
+
+    updates.push('updatedAt = NOW()');
+    values.push(id);
+
+    await conn.query(
+      `UPDATE quotations SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error patching quotation:', error);
+    return NextResponse.json(
+      { error: 'Failed to update quotation status' },
       { status: 500 }
     );
   } finally {

@@ -31,7 +31,7 @@ const TableRow = forwardRef<HTMLTableRowElement, HTMLAttributes<HTMLTableRowElem
   ({ className = '', ...props }, ref) => (
     <tr
       ref={ref}
-      className={`border-b border-gray-200 transition-colors hover:bg-gray-50 ${className}`}
+      className={`border-b border-gray-300 transition-colors hover:bg-gray-50 ${className}`}
       {...props}
     />
   )

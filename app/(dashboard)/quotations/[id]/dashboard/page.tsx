@@ -1,22 +1,33 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
   ArrowLeft, Pencil, FileText, Calendar, Users, DollarSign,
   Receipt, Wallet, ShoppingCart, TrendingUp, FileCheck, Upload, 
-  ListChecks, PackageCheck, Plus, Eye, CheckCircle, Clock, Download
+  ListChecks, PackageCheck, Plus, Eye, CheckCircle, Clock, Download,
+  Printer, XCircle, Trash2
 } from 'lucide-react';
 import Link from 'next/link';
+import InvoiceModal from '@/components/invoices/invoice-modal';
 
 export default function QuotationDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
   const [quotation, setQuotation] = useState<any>(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceRefreshKey, setInvoiceRefreshKey] = useState(0);
+
+  // อัพเดท URL เมื่อเปลี่ยน tab
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    router.push(`/quotations/${resolvedParams.id}/dashboard?tab=${tabId}`, { scroll: false });
+  };
 
   useEffect(() => {
     fetchQuotation();
@@ -34,6 +45,16 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleInvoiceSuccess = (invoiceId: number) => {
+    setShowInvoiceModal(false);
+    // Trigger invoice list refresh
+    setInvoiceRefreshKey(prev => prev + 1);
+    // Refresh quotation data
+    fetchQuotation();
+    // Switch to invoice tab
+    handleTabChange('invoice');
   };
 
   if (loading) {
@@ -55,7 +76,7 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
   const tabs = [
     { id: 'overview', label: 'ภาพรวม', icon: Eye },
     { id: 'quotation', label: 'ใบเสนอราคา', icon: FileText },
-    { id: 'invoice', label: 'ใบแจ้งหนี้', icon: Receipt },
+    { id: 'invoice', label: 'งานบัญชี', icon: Receipt }, //ใบแจ้งหนี้/ใบกำกับภาษี/ใบเสร็จรับเงิน
     { id: 'customer-payment', label: 'การชำระเงินลูกค้า', icon: Wallet },
     { id: 'wholesale-payment', label: 'ชำระเงิน Wholesale', icon: ShoppingCart },
     { id: 'tax', label: 'ภาษีซื้อ', icon: FileCheck },
@@ -155,15 +176,15 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-300">
         <div className="flex gap-2 overflow-x-auto pb-px">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                onClick={() => handleTabChange(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3  font-medium text-sm whitespace-nowrap transition-colors ${
                   activeTab === tab.id
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
@@ -180,8 +201,8 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
       {/* Tab Content */}
       <div className="min-h-[400px]">
         {activeTab === 'overview' && <OverviewTab quotation={quotation} />}
-        {activeTab === 'quotation' && <QuotationTab quotationId={resolvedParams.id} />}
-        {activeTab === 'invoice' && <InvoiceTab />}
+        {activeTab === 'quotation' && <QuotationTab quotation={quotation} quotationId={resolvedParams.id} />}
+        {activeTab === 'invoice' && <InvoiceTab quotation={quotation} onCreateInvoice={() => setShowInvoiceModal(true)} refreshKey={invoiceRefreshKey} />}
         {activeTab === 'customer-payment' && <CustomerPaymentTab />}
         {activeTab === 'wholesale-payment' && <WholesalePaymentTab />}
         {activeTab === 'tax' && <TaxTab />}
@@ -191,6 +212,21 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
         {activeTab === 'profit' && <ProfitTab />}
         {activeTab === 'checklist' && <ChecklistTab />}
       </div>
+
+      {/* Invoice Modal */}
+      {showInvoiceModal && quotation && (
+        <InvoiceModal
+          quotation={{
+            id: quotation.id,
+            quotationNumber: quotation.quotationNumber,
+            customerName: quotation.customerName,
+            grandTotal: quotation.grandTotal,
+            status: quotation.status,
+          }}
+          onClose={() => setShowInvoiceModal(false)}
+          onSuccess={handleInvoiceSuccess}
+        />
+      )}
     </div>
   );
 }
@@ -287,77 +323,696 @@ function OverviewTab({ quotation }: { quotation: any }) {
   );
 }
 
-function QuotationTab({ quotationId }: { quotationId: string }) {
+function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId: string }) {
+  const [updating, setUpdating] = useState(false);
+
+  const statusOptions = [
+    { value: 'PENDING', label: 'รอดำเนินการ', color: 'bg-yellow-500', textColor: 'text-yellow-700' },
+    { value: 'CONFIRMED', label: 'ยืนยัน', color: 'bg-blue-500', textColor: 'text-blue-700' },
+    { value: 'CANCELLED', label: 'ยกเลิก', color: 'bg-red-500', textColor: 'text-red-700' },
+  ];
+
+  const allStatuses = [
+    { value: 'NEW', label: 'ใหม่', color: 'bg-gray-500', textColor: 'text-gray-700' },
+    ...statusOptions,
+    { value: 'COMPLETED', label: 'เสร็จสิ้น', color: 'bg-green-500', textColor: 'text-green-700' },
+  ];
+
+  const currentStatus = allStatuses.find(s => s.value === quotation.status) || allStatuses[0];
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('th-TH', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(num || 0);
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('th-TH', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const handleStatusChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newStatus = e.target.value;
+    if (newStatus === quotation.status) return;
+    
+    const newStatusLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
+    if (!confirm(`ต้องการเปลี่ยนสถานะเป็น "${newStatusLabel}" หรือไม่?`)) {
+      e.target.value = quotation.status; // Reset select
+      return;
+    }
+    
+    setUpdating(true);
+    try {
+      const response = await fetch(`/api/quotations/${quotationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      
+      if (response.ok) {
+        alert('เปลี่ยนสถานะเรียบร้อยแล้ว');
+        window.location.reload();
+      } else {
+        const data = await response.json();
+        alert('เกิดข้อผิดพลาด: ' + (data.error || 'ไม่สามารถเปลี่ยนสถานะได้'));
+        e.target.value = quotation.status; // Reset select on error
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ');
+      e.target.value = quotation.status; // Reset select on error
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            ระบบการจัดการใบเสนอราคา
-          </h3>
+    <div className="space-y-6">
+      {/* Action Bar */}
+      <div className="flex items-center justify-between">
+        {/* Status */}
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-600">สถานะ:</span>
+          <select
+            value={quotation.status}
+            onChange={handleStatusChange}
+            disabled={updating}
+            className={`px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${currentStatus.textColor} ${updating ? 'opacity-50 cursor-wait' : ''}`}
+          >
+            {statusOptions.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+          {updating && <span className="text-sm text-gray-500">กำลังอัพเดท...</span>}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-2">
           <Link href={`/quotations/${quotationId}`}>
-            <Button size="sm" variant="outline">
+            <Button variant="outline" size="sm">
               <Eye className="w-4 h-4 mr-2" />
-              ดูใบเสนอราคา
+              ดูฉบับเต็ม
             </Button>
           </Link>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <p className="text-gray-700 mb-4">ใบเสนอราคาถูกสร้างและจัดการผ่านระบบที่มีอยู่แล้ว</p>
-          <div className="flex gap-2">
-            <Link href={`/quotations/${quotationId}`}>
-              <Button variant="outline" size="sm">
-                <Eye className="w-4 h-4 mr-2" />
-                ดูรายละเอียด
-              </Button>
-            </Link>
-            <Link href={`/quotations/${quotationId}/edit`}>
-              <Button variant="outline" size="sm">
-                <Pencil className="w-4 h-4 mr-2" />
-                แก้ไข
-              </Button>
-            </Link>
+          <Link href={`/quotations/${quotationId}/edit`}>
             <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              ดาวน์โหลด PDF
+              <Pencil className="w-4 h-4 mr-2" />
+              แก้ไข
             </Button>
-          </div>
+          </Link>
+          <Button variant="outline" size="sm">
+            <Download className="w-4 h-4 mr-2" />
+            PDF
+          </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Customer & Tour Info */}
+        <div className="lg:col-span-1 space-y-4">
+          {/* Customer */}
+          <Card>
+            <CardHeader className="pb-3">
+              <h4 className="font-semibold text-purple-700">ข้อมูลลูกค้า</h4>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">ชื่อ:</span>
+                <span className="ml-2 font-medium">{quotation.customerName}</span>
+              </div>
+              {quotation.customerPhone && (
+                <div>
+                  <span className="text-gray-500">โทร:</span>
+                  <span className="ml-2">{quotation.customerPhone}</span>
+                </div>
+              )}
+              {quotation.customerEmail && (
+                <div>
+                  <span className="text-gray-500">อีเมล:</span>
+                  <span className="ml-2">{quotation.customerEmail}</span>
+                </div>
+              )}
+              {quotation.customerTaxId && (
+                <div>
+                  <span className="text-gray-500">เลขผู้เสียภาษี:</span>
+                  <span className="ml-2">{quotation.customerTaxId}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Tour Info */}
+          <Card>
+            <CardHeader className="pb-3">
+              <h4 className="font-semibold text-purple-700">ข้อมูลทัวร์</h4>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">แพ็คเกจ:</span>
+                <span className="ml-2 font-medium">{quotation.tourName}</span>
+              </div>
+              {quotation.tourCode && (
+                <div>
+                  <span className="text-gray-500">รหัส:</span>
+                  <span className="ml-2">{quotation.tourCode}</span>
+                </div>
+              )}
+              <div>
+                <span className="text-gray-500">วันเดินทาง:</span>
+                <span className="ml-2">
+                  {quotation.departureDate ? (
+                    <>{formatDate(quotation.departureDate)} - {formatDate(quotation.returnDate)} ({quotation.numDays})</>
+                  ) : '-'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">จำนวน:</span>
+                <span className="ml-2">{quotation.paxCount} ท่าน</span>
+              </div>
+              {quotation.saleName && (
+                <div>
+                  <span className="text-gray-500">พนักงานขาย:</span>
+                  <span className="ml-2">{quotation.saleName}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right: Items Table */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader className="pb-3">
+              <h4 className="font-semibold text-purple-700">รายการสินค้า/บริการ</h4>
+            </CardHeader>
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-2 px-4 font-medium">#</th>
+                    <th className="text-left py-2 px-4 font-medium">รายการ</th>
+                    <th className="text-center py-2 px-4 font-medium">จำนวน</th>
+                    <th className="text-right py-2 px-4 font-medium">ราคา</th>
+                    <th className="text-right py-2 px-4 font-medium">รวม</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quotation.items?.map((item: any, index: number) => (
+                    <tr key={item.id} className="border-t">
+                      <td className="py-2 px-4 text-gray-500">{index + 1}</td>
+                      <td className="py-2 px-4">
+                        <span className="font-medium">{item.productName}</span>
+                        {item.itemType !== 'INCOME' && (
+                          <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${
+                            item.itemType === 'DISCOUNT' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {item.itemType === 'DISCOUNT' ? 'ส่วนลด' : 'ฟรี'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-4 text-center">{item.quantity}</td>
+                      <td className="py-2 px-4 text-right">{formatNumber(item.unitPrice)}</td>
+                      <td className="py-2 px-4 text-right font-medium">
+                        {item.itemType === 'DISCOUNT' ? '-' : ''}{formatNumber(item.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t-2 bg-gray-50">
+                  <tr>
+                    <td colSpan={4} className="py-2 px-4 text-right text-gray-600">ยอดรวมก่อนส่วนลด</td>
+                    <td className="py-2 px-4 text-right">{formatNumber(quotation.subtotal)}</td>
+                  </tr>
+                  {quotation.discountAmount > 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-1 px-4 text-right text-gray-600">ส่วนลด</td>
+                      <td className="py-1 px-4 text-right text-red-600">-{formatNumber(quotation.discountAmount)}</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td colSpan={4} className="py-1 px-4 text-right text-gray-600">VAT (7%)</td>
+                    <td className="py-1 px-4 text-right">{formatNumber(quotation.vatAmount)}</td>
+                  </tr>
+                  <tr className="bg-blue-50">
+                    <td colSpan={4} className="py-3 px-4 text-right font-semibold">ยอดรวมทั้งหมด</td>
+                    <td className="py-3 px-4 text-right">
+                      <span className="text-xl font-bold text-blue-600">{formatNumber(quotation.grandTotal)}</span>
+                      <span className="text-sm text-gray-500 ml-1">บาท</span>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </CardContent>
+          </Card>
+
+          {/* Payment Info */}
+          <Card className="mt-4">
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <p className="text-gray-600 text-xs">กำหนดชำระมัดจำ</p>
+                  <p className="font-medium">{formatDate(quotation.depositDueDate)}</p>
+                  <p className="text-lg font-bold text-yellow-700">{formatNumber(quotation.depositAmount)} ฿</p>
+                </div>
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-gray-600 text-xs">กำหนดชำระเต็มจำนวน</p>
+                  <p className="font-medium">{formatDate(quotation.fullPaymentDueDate)}</p>
+                  <p className="text-lg font-bold text-green-700">{formatNumber(quotation.fullPaymentAmount)} ฿</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Notes */}
+      {quotation.notes && (
+        <Card>
+          <CardHeader className="pb-2">
+            <h4 className="font-semibold text-purple-700">หมายเหตุ</h4>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">{quotation.notes}</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 
-function InvoiceTab() {
+function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any; onCreateInvoice: () => void; refreshKey?: number }) {
+  const [activeDocType, setActiveDocType] = useState<'invoice' | 'receipt' | 'taxInvoice'>('invoice');
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(true);
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState<number | null>(null);
+  const [hardDeletingInvoiceId, setHardDeletingInvoiceId] = useState<number | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+
+  // Invoice status options
+  const statusOptions = [
+    { value: 'DRAFT', label: 'ฉบับร่าง', color: 'bg-gray-100 text-gray-700 border-gray-300' },
+    { value: 'ISSUED', label: 'ออกแล้ว', color: 'bg-blue-100 text-blue-700 border-blue-300' },
+    { value: 'PAID', label: 'ชำระแล้ว', color: 'bg-green-100 text-green-700 border-green-300' },
+    { value: 'PARTIAL_PAID', label: 'ชำระบางส่วน', color: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
+    { value: 'CANCELLED', label: 'ยกเลิก', color: 'bg-red-100 text-red-700 border-red-300' },
+  ];
+
+  // Function to update invoice status
+  const handleStatusChange = async (invoiceId: number, newStatus: string) => {
+    try {
+      setUpdatingStatusId(invoiceId);
+      const response = await fetch(`/api/invoices/${invoiceId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update status');
+      }
+
+      // Update local state
+      setInvoices(prev => prev.map(inv => 
+        inv.id === invoiceId ? { ...inv, status: newStatus } : inv
+      ));
+    } catch (error: any) {
+      console.error('Error updating status:', error);
+      alert(`ไม่สามารถเปลี่ยนสถานะได้: ${error.message}`);
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  // Function to cancel invoice (soft delete)
+  const handleCancelInvoice = async (invoiceId: number, invoiceNumber: string) => {
+    const confirmed = window.confirm(`คุณต้องการยกเลิกใบแจ้งหนี้ "${invoiceNumber}" ใช่หรือไม่?\n\nหมายเหตุ: การยกเลิกจะเปลี่ยนสถานะเป็น "ยกเลิก"`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingInvoiceId(invoiceId);
+      const response = await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cancelReason: 'ยกเลิกโดยผู้ใช้',
+          cancelledById: 1, // TODO: Get from session
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to cancel invoice');
+      }
+
+      // Refresh invoices list
+      const fetchResponse = await fetch(`/api/invoices?quotationId=${quotation.id}`);
+      if (fetchResponse.ok) {
+        const data = await fetchResponse.json();
+        setInvoices(data.invoices || []);
+      }
+
+      alert('ยกเลิกใบแจ้งหนี้เรียบร้อยแล้ว');
+    } catch (error: any) {
+      console.error('Error cancelling invoice:', error);
+      alert(`ไม่สามารถยกเลิกใบแจ้งหนี้ได้: ${error.message}`);
+    } finally {
+      setDeletingInvoiceId(null);
+    }
+  };
+
+  // Function to hard delete invoice (permanent delete from DB)
+  const handleHardDeleteInvoice = async (invoiceId: number, invoiceNumber: string) => {
+    const confirmed = window.confirm(`⚠️ คุณต้องการลบใบแจ้งหนี้ "${invoiceNumber}" อย่างถาวรใช่หรือไม่?\n\n⛔ คำเตือน: การลบนี้ไม่สามารถกู้คืนได้!`);
+    if (!confirmed) return;
+
+    try {
+      setHardDeletingInvoiceId(invoiceId);
+      const response = await fetch(`/api/invoices/${invoiceId}?hardDelete=true`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete invoice');
+      }
+
+      // Refresh invoices list
+      const fetchResponse = await fetch(`/api/invoices?quotationId=${quotation.id}`);
+      if (fetchResponse.ok) {
+        const data = await fetchResponse.json();
+        setInvoices(data.invoices || []);
+      }
+
+      alert('ลบใบแจ้งหนี้เรียบร้อยแล้ว');
+    } catch (error: any) {
+      console.error('Error deleting invoice:', error);
+      alert(`ไม่สามารถลบใบแจ้งหนี้ได้: ${error.message}`);
+    } finally {
+      setHardDeletingInvoiceId(null);
+    }
+  };
+
+  const docTypes = [
+    { id: 'invoice', label: 'ใบแจ้งหนี้', icon: FileText, color: 'blue' },
+    { id: 'receipt', label: 'ใบเสร็จรับเงิน', icon: Receipt, color: 'green' },
+    { id: 'taxInvoice', label: 'ใบกำกับภาษี', icon: FileCheck, color: 'purple' },
+  ];
+
+  // Fetch invoices for this quotation
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      try {
+        setLoadingInvoices(true);
+        const response = await fetch(`/api/invoices?quotationId=${quotation.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setInvoices(data.invoices || []);
+        }
+      } catch (error) {
+        console.error('Error fetching invoices:', error);
+      } finally {
+        setLoadingInvoices(false);
+      }
+    };
+    fetchInvoices();
+  }, [quotation.id, refreshKey]);
+
+  // Calculate totals (exclude CANCELLED/VOIDED invoices)
+  const activeInvoices = invoices.filter(inv => inv.status !== 'CANCELLED' && inv.status !== 'VOIDED');
+  const totalInvoiced = activeInvoices.reduce((sum, inv) => sum + parseFloat(inv.grandTotal || 0), 0);
+  const totalPaid = invoices
+    .filter(inv => inv.status === 'PAID')
+    .reduce((sum, inv) => sum + parseFloat(inv.grandTotal || 0), 0);
+  const remaining = parseFloat(quotation.grandTotal || 0) - totalInvoiced;
+  const isFullyInvoiced = remaining <= 0 || parseFloat(quotation.grandTotal || 0) <= 0;
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('th-TH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const getStatusSelect = (invoice: any) => {
+    const currentStatus = statusOptions.find(s => s.value === invoice.status) || statusOptions[0];
+    const isUpdating = updatingStatusId === invoice.id;
+    
+    return (
+      <select
+        value={invoice.status}
+        onChange={(e) => handleStatusChange(invoice.id, e.target.value)}
+        disabled={isUpdating || invoice.status === 'CANCELLED' || invoice.status === 'VOIDED'}
+        className={`px-2 py-1 rounded-full text-xs font-medium border cursor-pointer disabled:cursor-not-allowed disabled:opacity-70 ${currentStatus.color}`}
+      >
+        {statusOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Receipt className="w-5 h-5" />
-            ระบบการจัดการใบแจ้งหนี้
-          </h3>
-          <Button size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            สร้างใบแจ้งหนี้
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-center py-12 text-gray-500">
-          <Receipt className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <p className="font-medium">ยังไม่มีใบแจ้งหนี้</p>
-          <p className="text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
-          <Button size="sm" className="mt-4" disabled>
-            <Plus className="w-4 h-4 mr-2" />
-            สร้างใบแจ้งหนี้
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-1">ยอดรวมทั้งหมด</p>
+              <p className="text-2xl font-bold text-blue-600">{parseFloat(quotation.grandTotal || 0).toLocaleString()} ฿</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-1">ออกใบแจ้งหนี้แล้ว</p>
+              <p className="text-2xl font-bold text-green-600">{totalInvoiced.toLocaleString()} ฿</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-1">ชำระเงินแล้ว</p>
+              <p className="text-2xl font-bold text-emerald-600">{totalPaid.toLocaleString()} ฿</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-1">คงเหลือ</p>
+              <p className="text-2xl font-bold text-orange-600">{remaining.toLocaleString()} ฿</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Document Type Sub-tabs */}
+      <div className="flex gap-2 border-b pb-2 border-gray-300">
+        {docTypes.map((doc) => {
+          const Icon = doc.icon;
+          return (
+            <button
+              key={doc.id}
+              onClick={() => setActiveDocType(doc.id as any)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-t-lg font-medium text-sm transition-colors ${
+                activeDocType === doc.id
+                  ? `bg-${doc.color}-50 text-${doc.color}-700 border-b-2 border-${doc.color}-500`
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {doc.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Invoice Section */}
+      {activeDocType === 'invoice' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                ใบแจ้งหนี้ (Invoice)
+              </h3>
+              <Button 
+                size="sm" 
+                onClick={onCreateInvoice}
+                disabled={isFullyInvoiced}
+                title={isFullyInvoiced ? 'ออกใบแจ้งหนี้ครบตามยอดใบเสนอราคาแล้ว' : ''}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                {isFullyInvoiced ? 'ออกใบแจ้งหนี้ครบแล้ว' : 'สร้างใบแจ้งหนี้'}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingInvoices ? (
+              <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
+            ) : invoices.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p className="font-medium">ยังไม่มีใบแจ้งหนี้</p>
+                <p className="text-sm mt-1">คลิกปุ่ม "สร้างใบแจ้งหนี้" เพื่อเริ่มต้น</p>
+                <Button size="sm" className="mt-4" onClick={onCreateInvoice}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  สร้างใบแจ้งหนี้
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left py-3 px-4 font-medium">เลขที่</th>
+                      <th className="text-left py-3 px-4 font-medium">วันที่ออก</th>
+                      <th className="text-left py-3 px-4 font-medium">กำหนดชำระ</th>
+                      <th className="text-right py-3 px-4 font-medium">จำนวนเงิน</th>
+                      <th className="text-center py-3 px-4 font-medium">สถานะ</th>
+                      <th className="text-center py-3 px-4 font-medium">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map((invoice) => (
+                      <tr key={invoice.id} className="border-t border-gray-200 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <span className="font-medium text-blue-600">{invoice.invoiceNumber}</span>
+                        </td>
+                        <td className="py-3 px-4">{formatDate(invoice.invoiceDate)}</td>
+                        <td className="py-3 px-4">{formatDate(invoice.dueDate)}</td>
+                        <td className="py-3 px-4 text-right font-medium">
+                          {parseFloat(invoice.grandTotal || 0).toLocaleString()} ฿
+                        </td>
+                        <td className="py-3 px-4 text-center">{getStatusSelect(invoice)}</td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                              onClick={() => window.open(`/invoices/${invoice.id}`, '_blank')}
+                              title="ดู"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors cursor-pointer"
+                              onClick={() => window.open(`/invoices/${invoice.id}/edit`, '_blank')}
+                              title="แก้ไข"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors cursor-pointer"
+                              onClick={() => alert('พิมพ์ Invoice')}
+                              title="พิมพ์"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+                            {invoice.status !== 'CANCELLED' && invoice.status !== 'VOIDED' && (
+                              <button
+                                className="p-1.5 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                                onClick={() => handleCancelInvoice(invoice.id, invoice.invoiceNumber)}
+                                disabled={deletingInvoiceId === invoice.id}
+                                title="ยกเลิก"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                              onClick={() => handleHardDeleteInvoice(invoice.id, invoice.invoiceNumber)}
+                              disabled={hardDeletingInvoiceId === invoice.id}
+                              title="ลบ"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Receipt Section */}
+      {activeDocType === 'receipt' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-green-600" />
+                ใบเสร็จรับเงิน (Receipt)
+              </h3>
+              <Button size="sm" disabled>
+                <Plus className="w-4 h-4 mr-2" />
+                สร้างใบเสร็จ
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-yellow-700">
+                <strong>หมายเหตุ:</strong> ใบเสร็จรับเงินต้องสร้างจากใบแจ้งหนี้ที่มีอยู่แล้ว
+              </p>
+            </div>
+            <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <Receipt className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium">ยังไม่มีใบเสร็จรับเงิน</p>
+              <p className="text-sm mt-1">สร้างใบแจ้งหนี้ก่อน แล้วค่อยออกใบเสร็จ</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tax Invoice Section */}
+      {activeDocType === 'taxInvoice' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-purple-600" />
+                ใบกำกับภาษี (Tax Invoice)
+              </h3>
+              <Button size="sm" disabled>
+                <Plus className="w-4 h-4 mr-2" />
+                สร้างใบกำกับภาษี
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-yellow-700">
+                <strong>หมายเหตุ:</strong> ใบกำกับภาษีต้องสร้างจากใบแจ้งหนี้ที่มีอยู่แล้ว
+              </p>
+            </div>
+            <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <FileCheck className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium">ยังไม่มีใบกำกับภาษี</p>
+              <p className="text-sm mt-1">สร้างใบแจ้งหนี้ก่อน แล้วค่อยออกใบกำกับภาษี</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 

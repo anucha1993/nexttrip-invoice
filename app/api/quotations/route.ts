@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireAuth } from '@/lib/api-auth';
 
 // GET - List quotations with pagination and search
 export async function GET(request: NextRequest) {
   console.log('📥 GET /api/quotations - Request received');
   let conn;
   try {
+    // ✅ Check authentication
+    const session = await requireAuth();
+    console.log('✅ Authenticated user:', session.id);
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '15');
@@ -114,6 +118,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let conn;
   try {
+    // ✅ Check authentication
+    const session = await requireAuth();
+    console.log('✅ Authenticated user creating quotation:', session.id);
+    
     const body = await request.json();
     conn = await pool.getConnection();
 
@@ -163,9 +171,9 @@ export async function POST(request: NextRequest) {
         subtotal, discountAmount, vatExemptAmount, preTaxAmount, vatAmount,
         grandTotal, withholdingTax, hasWithholdingTax, commission, commissionNote,
         status, paymentStatus, notes, createdById,
-        vatMode, preVatAmount, includeVatAmount, netPayable,
+        vatMode, preVatAmount, includeVatAmount, netPayable, noCost,
         createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [
         quotationNumber,
         body.customerId,
@@ -197,7 +205,7 @@ export async function POST(request: NextRequest) {
         body.hasWithholdingTax || false,
         body.commission || 0,
         body.commissionNote || null,
-        body.status || 'DRAFT',
+        body.status || 'NEW',
         body.paymentStatus || 'UNPAID',
         body.notes || null,
         body.createdById || 'system',
@@ -205,6 +213,7 @@ export async function POST(request: NextRequest) {
         body.preVatAmount || 0,
         body.includeVatAmount || 0,
         body.netPayable || 0,
+        body.noCost || false,
       ]
     );
 

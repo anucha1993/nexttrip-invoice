@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireAuth } from '@/lib/api-auth';
 
 // GET - รายการ Products ทั้งหมด
 export async function GET(request: NextRequest) {
   let conn;
   try {
+    // ✅ Check authentication
+    await requireAuth();
+    
     conn = await pool.getConnection();
     
     const { searchParams } = new URL(request.url);
@@ -69,6 +73,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let conn;
   try {
+    // ✅ Check authentication
+    await requireAuth();
+    
     const body = await request.json();
     const { name, price, calculationType, includePax } = body;
 

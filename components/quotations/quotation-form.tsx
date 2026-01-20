@@ -151,6 +151,7 @@ export interface QuotationFormProps {
     notes?: string;
     hasWithholdingTax?: boolean;
     vatMode?: 'INCLUDE' | 'EXCLUDE';
+    noCost?: boolean;
     status?: string;
     paymentStatus?: string;
     items?: QuotationItem[];
@@ -168,6 +169,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [successMessage, setSuccessMessage] = useState<string>('');
   const [quotationNumber, setQuotationNumber] = useState(initialData?.quotationNumber || '');
 
   // Master data
@@ -203,6 +205,11 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
   const isDateFieldsDisabled = selectedTour !== null && !isCustomTour;
 
   // Form data - initialize from initialData if in edit mode
+  // console.log('=== QuotationForm Init ===');
+  // console.log('initialData:', initialData);
+  // console.log('initialData.noCost:', initialData?.noCost);
+  // console.log('!!initialData?.noCost:', !!initialData?.noCost);
+  
   const [formData, setFormData] = useState({
     customerId: initialData?.customerId || '',
     tourName: initialData?.tourName || '',
@@ -228,9 +235,10 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
     fullPaymentAmount: initialData?.fullPaymentAmount || 0,
     paymentType: initialData?.paymentType || 'deposit' as 'deposit' | 'full',
     notes: initialData?.notes || '',
-    hasWithholdingTax: initialData?.hasWithholdingTax || false,
+    hasWithholdingTax: !!initialData?.hasWithholdingTax,
     vatMode: initialData?.vatMode || 'EXCLUDE' as 'INCLUDE' | 'EXCLUDE',
-    status: initialData?.status || 'DRAFT',
+    noCost: !!initialData?.noCost,
+    status: initialData?.status || 'NEW',
     paymentStatus: initialData?.paymentStatus || 'UNPAID',
   });
 
@@ -883,6 +891,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
         grandTotal: totals.grandTotal,
         withholdingTax: totals.withholdingTax,
         netPayable: totals.netPayable,
+        noCost: formData.noCost,
         createdById: 'system', // TODO: Get from auth
         items: items.filter(item => item.productName),
       };
@@ -899,7 +908,20 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
 
       if (response.ok) {
         const result = await response.json();
-        router.push(`/quotations/${mode === 'create' ? result.id : quotationId}`);
+        const message = mode === 'create' 
+          ? `สร้างใบเสนอราคา ${result.quotationNumber || ''} สำเร็จ!`
+          : `บันทึกการแก้ไขใบเสนอราคา ${quotationNumber} สำเร็จ!`;
+        
+        setSuccessMessage(message);
+        
+        // Redirect after showing success message
+        setTimeout(() => {
+          if (mode === 'create') {
+            router.push(`/quotations/${result.id}`);
+          } else {
+            router.push(`/quotations/${quotationId}/edit`);
+          }
+        }, 1500);
       } else {
         const error = await response.json();
         console.error('API Error Response:', error);
@@ -934,9 +956,21 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
         </div>
       </div>
 
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span>{successMessage}</span>
+        </div>
+      )}
+
       {errors.submit && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {errors.submit}
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          </svg>
+          <span>{errors.submit}</span>
         </div>
       )}
 
@@ -1623,7 +1657,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
             {/* เลขที่ใบเสนอราคา และ รหัสทัวร์ */}
             <Card>
               <CardContent className="pt-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       เลขที่ใบเสนอราคา
@@ -1638,6 +1672,30 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                     />
                   </div>
                   
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="noCost"
+                      checked={!!formData.noCost}
+                      onChange={(e) => {
+                        // console.log('=== noCost Debug ===');
+                        // console.log('Checkbox clicked:', e.target.checked);
+                        // console.log('Current formData.noCost:', formData.noCost);
+                        setFormData(prev => {
+                          const updated = { ...prev, noCost: e.target.checked };
+                          // console.log('Updated formData.noCost:', updated.noCost);
+                          return updated;
+                        });
+                      }}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="noCost" className="text-sm text-gray-700 cursor-pointer">
+                      ByPass ไม่มีต้นทุน
+                      <span className="ml-2 text-xs text-gray-400">
+                        (Current: {String(formData.noCost)})
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </CardContent>
             </Card>

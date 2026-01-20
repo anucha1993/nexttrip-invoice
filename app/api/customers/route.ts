@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import crypto from 'crypto';
 import type { PoolConnection } from 'mariadb';
+import { requireAuth } from '@/lib/api-auth';
 
 function generateCuid() {
   return 'c' + crypto.randomBytes(12).toString('hex');
@@ -11,6 +12,9 @@ function generateCuid() {
 export async function GET(request: NextRequest) {
   let conn;
   try {
+    // ✅ Check authentication
+    await requireAuth();
+    
     conn = await pool.getConnection();
     
     const { searchParams } = new URL(request.url);
@@ -76,6 +80,9 @@ async function generateCustomerCode(conn: PoolConnection): Promise<string> {
 export async function POST(request: NextRequest) {
   let conn;
   try {
+    // ✅ Check authentication
+    await requireAuth();
+    
     const body = await request.json();
     const { 
       customerId, customerTypeNew, // For checking if old customer or new

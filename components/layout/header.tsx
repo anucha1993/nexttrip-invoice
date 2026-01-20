@@ -1,28 +1,62 @@
 'use client';
 
-import { Bell, Search, User, ChevronDown, LogOut } from 'lucide-react';
+import { Bell, Search, User, ChevronDown, LogOut, Menu } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick: () => void;
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch user');
-        return res.json();
-      })
-      .then(data => setUser(data.user))
-      .catch(error => {
-        console.error('Error fetching user:', error);
-        // Optionally redirect to login if auth fails
-        // router.push('/login');
-      });
-  }, []);
+    // Prevent redirect loop - only check once
+    if (authChecked) return;
+    
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/auth/me', {
+          credentials: 'include',
+          cache: 'no-store'
+        });
+        
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            // Session expired or invalid, redirect to login
+            router.push('/login');
+            return;
+          }
+          // For other errors, just log and continue
+          console.error('Auth check failed with status:', res.status);
+          setAuthChecked(true);
+          return;
+        }
+        
+        const data = await res.json();
+        
+        if (!data.user) {
+          // No user data, redirect to login
+          router.push('/login');
+          return;
+        }
+        
+        setUser(data.user);
+        setAuthChecked(true);
+      } catch (error) {
+        console.error('Network error fetching user:', error);
+        // Don't redirect on network errors, user might be offline
+        setAuthChecked(true);
+      }
+    };
+    
+    checkAuth();
+  }, [authChecked, router]);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -30,9 +64,17 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
+    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6">
+      {/* Mobile Menu Button */}
+      <button
+        onClick={onMenuClick}
+        className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
+      >
+        <Menu className="w-6 h-6" />
+      </button>
+
       {/* Search */}
-      <div className="flex-1 max-w-md">
+      <div className="flex-1 max-w-md hidden md:block">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -87,16 +129,16 @@ export function Header() {
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-3 hover:bg-gray-50 rounded-lg p-2 transition-colors"
+            className="flex items-center gap-2 lg:gap-3 hover:bg-gray-50 rounded-lg p-2 transition-colors"
           >
             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
               <User className="w-4 h-4 text-blue-600" />
             </div>
-            <div className="text-left hidden sm:block">
+            <div className="text-left hidden lg:block">
               <p className="text-sm font-medium text-gray-900">{user?.name || 'User'}</p>
               <p className="text-xs text-gray-500">{user?.email || ''}</p>
             </div>
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+            <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:block" />
           </button>
 
           {showUserMenu && (

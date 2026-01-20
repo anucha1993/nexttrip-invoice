@@ -26,7 +26,7 @@ interface Quotation {
   numDaysName: string | null;
   paxCount: number;
   grandTotal: number;
-  status: 'DRAFT' | 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+  status: 'NEW' | 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
   paymentStatus: 'UNPAID' | 'DEPOSIT' | 'PARTIAL' | 'PAID' | 'REFUNDED';
   quotationDate: string;
   createdAt: string;

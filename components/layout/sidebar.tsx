@@ -88,7 +88,12 @@ const menuItems: MenuItem[] = [
   { icon: Settings, label: 'ตั้งค่า', href: '/settings' },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
@@ -113,11 +118,19 @@ export function Sidebar() {
     return false;
   };
 
+  const handleLinkClick = () => {
+    // Close sidebar on mobile when clicking a link
+    if (window.innerWidth < 1024) {
+      onClose();
+    }
+  };
+
   return (
     <aside
-      className={`fixed left-0 top-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300 ${
-        collapsed ? 'w-16' : 'w-64'
-      }`}
+      className={`fixed left-0 top-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300 
+        ${collapsed ? 'w-16' : 'w-64'}
+        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}
     >
       {/* Logo */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
@@ -195,6 +208,7 @@ export function Sidebar() {
                       <Link
                         key={subItem.href}
                         href={subItem.href}
+                        onClick={handleLinkClick}
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                           isSubActive
                             ? 'bg-blue-50 text-blue-600 font-medium'

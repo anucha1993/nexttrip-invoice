@@ -12,6 +12,7 @@ import {
   PackageCheck, AlertCircle, Download, Plus, Eye
 } from 'lucide-react';
 import Link from 'next/link';
+import InvoiceModal from '@/components/invoices/invoice-modal';
 
 interface QuotationItem {
   id: string;
@@ -74,7 +75,7 @@ interface Quotation {
 }
 
 const statusLabels: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  DRAFT: { label: 'ร่าง', color: 'bg-gray-100 text-gray-700 border-gray-300', icon: FileText },
+  NEW: { label: 'ร่าง', color: 'bg-gray-100 text-gray-700 border-gray-300', icon: FileText },
   PENDING: { label: 'รอดำเนินการ', color: 'bg-yellow-100 text-yellow-700 border-yellow-300', icon: Clock },
   CONFIRMED: { label: 'ยืนยันแล้ว', color: 'bg-green-100 text-green-700 border-green-300', icon: CheckCircle },
   CANCELLED: { label: 'ยกเลิก', color: 'bg-red-100 text-red-700 border-red-300', icon: XCircle },
@@ -96,6 +97,7 @@ export default function ViewQuotationPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   useEffect(() => {
     fetchQuotation();
@@ -131,6 +133,12 @@ export default function ViewQuotationPage({ params }: { params: Promise<{ id: st
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handleInvoiceSuccess = (invoiceId: number) => {
+    setShowInvoiceModal(false);
+    // Redirect to invoice view page (when we create it)
+    router.push(`/invoices/${invoiceId}`);
   };
 
   const formatNumber = (num: number) => {
@@ -487,7 +495,11 @@ export default function ViewQuotationPage({ params }: { params: Promise<{ id: st
                 <CreditCard className="w-4 h-4 mr-2" />
                 บันทึกการชำระเงิน
               </Button>
-              <Button variant="outline" className="w-full justify-start">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => setShowInvoiceModal(true)}
+              >
                 <FileText className="w-4 h-4 mr-2" />
                 สร้างใบแจ้งหนี้
               </Button>
@@ -540,6 +552,21 @@ export default function ViewQuotationPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
         </div>
+      )}
+
+      {/* Invoice Modal */}
+      {showInvoiceModal && quotation && (
+        <InvoiceModal
+          quotation={{
+            id: quotation.id,
+            quotationNumber: quotation.quotationNumber,
+            customerName: quotation.customerName,
+            grandTotal: quotation.grandTotal,
+            status: quotation.status,
+          }}
+          onClose={() => setShowInvoiceModal(false)}
+          onSuccess={handleInvoiceSuccess}
+        />
       )}
     </div>
   );

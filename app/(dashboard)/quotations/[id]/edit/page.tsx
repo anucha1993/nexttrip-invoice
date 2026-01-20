@@ -16,7 +16,7 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
       console.log('Edit page - Response status:', response.status);
       if (response.ok) {
         const data = await response.json();
-        console.log('Edit page - Data received:', data);
+        // console.log('Edit page - Data received:', data);
         setInitialData({
           quotationNumber: data.quotationNumber,
           customerId: data.customerId,
@@ -51,12 +51,13 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
           notes: data.notes,
           hasWithholdingTax: data.hasWithholdingTax,
           vatMode: data.vatMode,
+          noCost: data.noCost,
           status: data.status,
           paymentStatus: data.paymentStatus,
           items: data.items,
         });
       } else {
-        console.error('Edit page - Response not OK:', response.status, await response.text());
+        // console.error('Edit page - Response not OK:', response.status, await response.text());
         router.push('/quotations');
       }
     } catch (error) {

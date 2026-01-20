@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireAuth, requirePermission } from '@/lib/api-auth';
 
 // GET - รายการ Profiles ทั้งหมด
 export async function GET() {
   let conn;
   try {
+    // ✅ Check authentication and permission
+    const session = await requireAuth();
+    requirePermission(session, 'VIEW_PROFILES');
+    
     conn = await pool.getConnection();
     
     // Get profiles
@@ -48,6 +53,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   let conn;
   try {
+    // ✅ Check authentication and permission
+    const session = await requireAuth();
+    requirePermission(session, 'CREATE_PROFILE');
     const body = await request.json();
     const { code, name, description, isActive, permissionIds } = body;
 

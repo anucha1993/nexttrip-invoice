@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
+import { requireAuth, requirePermission } from '@/lib/api-auth';
 
 function generateCuid() {
   return 'c' + randomBytes(12).toString('hex');
@@ -11,6 +12,10 @@ function generateCuid() {
 export async function GET() {
   let conn;
   try {
+    // ✅ Check authentication and permission
+    const session = await requireAuth();
+    requirePermission(session, 'VIEW_USERS');
+    
     conn = await pool.getConnection();
     
     const users = await conn.query(`
