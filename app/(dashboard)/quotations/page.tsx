@@ -386,7 +386,7 @@ export default function QuotationsPage() {
                           <div className="flex items-center justify-end gap-1">
                             <Link href={`/quotations/${quotation.id}/dashboard`} className="inline-flex">
                               <Button variant="ghost" size="icon" title="Dashboard">
-                                <LayoutDashboard className="w-4 h-4" />
+                                <Pencil className="w-4 h-4" />
                               </Button>
                             </Link>
                             <Link href={`/quotations/${quotation.id}`} className="inline-flex">
@@ -394,11 +394,7 @@ export default function QuotationsPage() {
                                 <Eye className="w-4 h-4" />
                               </Button>
                             </Link>
-                            <Link href={`/quotations/${quotation.id}/edit`} className="inline-flex">
-                              <Button variant="ghost" size="icon" title="แก้ไข">
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                            </Link>
+                            
                             <Button 
                               variant="ghost" 
                               size="icon" 
