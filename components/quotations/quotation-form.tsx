@@ -129,6 +129,9 @@ export interface QuotationFormProps {
     customerContactName?: string | null;
     customerContactPhone?: string | null;
     customerNotes?: string | null;
+    customerSocialId?: string | null;
+    customerSource?: string | null;
+    customerIsActive?: boolean;
     tourName?: string;
     bookingCode?: string;
     ntCode?: string;
