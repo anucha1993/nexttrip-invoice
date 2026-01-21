@@ -26,6 +26,9 @@ interface Customer {
   contactName: string | null;
   contactPhone: string | null;
   notes: string | null;
+  socialId: string | null;
+  source: string | null;
+  isActive: boolean;
 }
 
 interface Sale {
