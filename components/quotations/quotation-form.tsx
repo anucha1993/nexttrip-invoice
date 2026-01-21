@@ -278,6 +278,9 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
         contactName: initialData.customerContactName || null,
         contactPhone: initialData.customerContactPhone || null,
         notes: initialData.customerNotes || null,
+        socialId: initialData.customerSocialId || null,
+        source: initialData.customerSource || null,
+        isActive: initialData.customerIsActive ?? true,
       });
       // In edit mode, tour is custom (user can edit dates)
       setIsCustomTour(true);
