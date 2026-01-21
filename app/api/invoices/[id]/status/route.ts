@@ -28,6 +28,14 @@ export async function PATCH(
       );
     }
     
+    // Block manual changes to PAID/PARTIAL_PAID - these must come from actual payments
+    if (status === 'PAID' || status === 'PARTIAL_PAID') {
+      return NextResponse.json(
+        { error: 'ไม่สามารถเปลี่ยนสถานะเป็น "ชำระแล้ว" หรือ "ชำระบางส่วน" ได้โดยตรง กรุณาบันทึกการชำระเงินจริงในระบบ' },
+        { status: 400 }
+      );
+    }
+    
     // Check if invoice exists
     const existing = await connection.query(
       'SELECT * FROM invoices WHERE id = ?',

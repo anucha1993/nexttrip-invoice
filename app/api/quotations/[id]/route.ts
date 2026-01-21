@@ -98,12 +98,29 @@ export async function GET(
     const totalInvoiced = parseFloat(invoicedResult[0]?.totalInvoiced || 0);
     const remainingAmount = parseFloat(quotation.grandTotal || 0) - totalInvoiced;
 
+    // Calculate paid and refunded amounts from confirmed transactions
+    const paymentResult = await conn.query(
+      `SELECT 
+        COALESCE(SUM(CASE WHEN transactionType = 'PAYMENT' AND status = 'CONFIRMED' THEN amount ELSE 0 END), 0) as totalPaid,
+        COALESCE(SUM(CASE WHEN transactionType = 'REFUND' AND status = 'CONFIRMED' THEN amount ELSE 0 END), 0) as totalRefunded
+       FROM customer_transactions
+       WHERE quotationId = ?`,
+      [id]
+    );
+    const totalPaid = parseFloat(paymentResult[0]?.totalPaid || 0);
+    const totalRefunded = parseFloat(paymentResult[0]?.totalRefunded || 0);
+    // ยอดคงเหลือ = ยอด grandTotal - ชำระแล้ว + คืนเงิน
+    const balanceAmount = Math.round((parseFloat(quotation.grandTotal || 0) - totalPaid + totalRefunded) * 100) / 100;
+
     const result = {
       ...quotation,
       saleName,
       items,
       totalInvoiced,
       remainingAmount,
+      totalPaid,
+      totalRefunded,
+      balanceAmount,
     };
     console.log('📤 API Response - noCost:', result.noCost, 'hasWithholdingTax:', result.hasWithholdingTax);
 

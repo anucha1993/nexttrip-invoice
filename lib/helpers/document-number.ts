@@ -1,7 +1,7 @@
 // lib/helpers/document-number.ts
-// Helper สำหรับ Generate เลขที่เอกสาร (Invoice, Receipt, Tax Invoice)
+// Helper สำหรับ Generate เลขที่เอกสาร (Invoice, Receipt, Tax Invoice, Credit Note, Transaction)
 
-export type DocumentType = 'INVOICE' | 'RECEIPT' | 'TAX_INVOICE';
+export type DocumentType = 'INVOICE' | 'RECEIPT' | 'TAX_INVOICE' | 'CREDIT_NOTE' | 'PAYMENT' | 'REFUND';
 
 /**
  * Generate เลขที่เอกสารถัดไป (Thread-safe)
@@ -27,6 +27,7 @@ export async function generateDocumentNumber(
   let prefix: string;
   let tableName: string;
   let columnName: string;
+  let whereClause = '';
   
   switch (type) {
     case 'INVOICE':
@@ -35,14 +36,31 @@ export async function generateDocumentNumber(
       columnName = 'invoiceNumber';
       break;
     case 'RECEIPT':
-      prefix = `PM${yy}${mm}`;        // PM2601
+      prefix = `RC${yy}${mm}`;        // RC2601
       tableName = 'receipts';
       columnName = 'receiptNumber';
       break;
     case 'TAX_INVOICE':
       prefix = `RVN${yyyy}${mm}`;     // RVN202601
-      tableName = 'tax_invoices';
+      tableName = 'invoices';
       columnName = 'taxInvoiceNumber';
+      break;
+    case 'CREDIT_NOTE':
+      prefix = `CN${yy}${mm}`;        // CN2601
+      tableName = 'credit_notes';
+      columnName = 'creditNoteNumber';
+      break;
+    case 'PAYMENT':
+      prefix = `PM${yy}${mm}`;        // PM2601
+      tableName = 'customer_transactions';
+      columnName = 'transactionNumber';
+      whereClause = ` AND transactionType = 'PAYMENT'`;
+      break;
+    case 'REFUND':
+      prefix = `RF${yy}${mm}`;        // RF2601
+      tableName = 'customer_transactions';
+      columnName = 'transactionNumber';
+      whereClause = ` AND transactionType = 'REFUND'`;
       break;
     default:
       throw new Error(`Invalid document type: ${type}`);
@@ -52,7 +70,7 @@ export async function generateDocumentNumber(
     // ดึง lastNumber จากฐานข้อมูลจริง โดยหา max number ที่มี prefix ตรงกัน
     const rows = await conn.query(
       `SELECT ${columnName} FROM ${tableName} 
-       WHERE ${columnName} LIKE ? 
+       WHERE ${columnName} LIKE ?${whereClause}
        ORDER BY ${columnName} DESC 
        LIMIT 1`,
       [`${prefix}-%`]

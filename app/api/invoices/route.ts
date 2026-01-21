@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const quotationId = searchParams.get('quotationId');
     const status = searchParams.get('status');
+    const hasTaxInvoice = searchParams.get('hasTaxInvoice');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
@@ -49,6 +50,12 @@ export async function GET(request: NextRequest) {
       params.push(status);
     }
     
+    if (hasTaxInvoice === 'true') {
+      query += ' AND i.hasTaxInvoice = TRUE AND i.taxInvoiceNumber IS NOT NULL';
+    } else if (hasTaxInvoice === 'false') {
+      query += ' AND (i.hasTaxInvoice = FALSE OR i.hasTaxInvoice IS NULL)';
+    }
+    
     // Count total - สร้าง count query แยกต่างหาก
     let countQuery = `
       SELECT COUNT(*) as total
@@ -70,6 +77,12 @@ export async function GET(request: NextRequest) {
       countParams.push(status);
     }
     
+    if (hasTaxInvoice === 'true') {
+      countQuery += ' AND i.hasTaxInvoice = TRUE AND i.taxInvoiceNumber IS NOT NULL';
+    } else if (hasTaxInvoice === 'false') {
+      countQuery += ' AND (i.hasTaxInvoice = FALSE OR i.hasTaxInvoice IS NULL)';
+    }
+    
     const countResult = await connection.query(countQuery, countParams);
     const total = Number(countResult[0]?.total) || 0;
     
@@ -78,6 +91,36 @@ export async function GET(request: NextRequest) {
     params.push(limit, offset);
     
     const invoices = await connection.query(query, params);
+    
+    // Fetch items for each invoice
+    const invoiceIds = invoices.map((inv: any) => inv.id);
+    let itemsMap: Record<number, any[]> = {};
+    
+    if (invoiceIds.length > 0) {
+      const itemsQuery = `
+        SELECT * FROM invoice_items 
+        WHERE invoiceId IN (${invoiceIds.map(() => '?').join(',')})
+        ORDER BY invoiceId, sortOrder
+      `;
+      const items = await connection.query(itemsQuery, invoiceIds);
+      
+      // Group items by invoiceId
+      items.forEach((item: any) => {
+        const invoiceId = Number(item.invoiceId);
+        if (!itemsMap[invoiceId]) {
+          itemsMap[invoiceId] = [];
+        }
+        itemsMap[invoiceId].push({
+          ...item,
+          id: Number(item.id),
+          invoiceId: Number(item.invoiceId),
+          productId: item.productId ? Number(item.productId) : null,
+          quantity: Number(item.quantity),
+          unitPrice: parseFloat(item.unitPrice) || 0,
+          amount: parseFloat(item.amount) || 0,
+        });
+      });
+    }
     
     // Convert BigInt to Number for JSON serialization
     const serializedInvoices = invoices.map((inv: any) => ({
@@ -89,6 +132,7 @@ export async function GET(request: NextRequest) {
       subtotal: parseFloat(inv.subtotal) || 0,
       vatAmount: parseFloat(inv.vatAmount) || 0,
       discountAmount: parseFloat(inv.discountAmount) || 0,
+      items: itemsMap[Number(inv.id)] || [],
     }));
     
     return NextResponse.json({
@@ -138,6 +182,7 @@ export async function POST(request: NextRequest) {
       depositAmount,
       notes,
       createdById,
+      createdByName,
     } = body;
     
     // Validation 1: ตรวจสอบว่า Quotation สามารถสร้าง Invoice ได้
@@ -192,8 +237,8 @@ export async function POST(request: NextRequest) {
         invoiceNumber, quotationId, pax, invoiceDate, dueDate,
         subtotal, discountAmount, vatExemptAmount, preTaxAmount,
         vatAmount, grandTotal, withholdingTax, depositAmount,
-        status, notes, createdById
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?)`,
+        status, notes, createdById, createdByName
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?)`,
       [
         invoiceNumber,
         quotationId,
@@ -209,7 +254,8 @@ export async function POST(request: NextRequest) {
         withholdingTax || 0,
         depositAmount || 0,
         notes || null,
-        createdById,
+        createdById || null,
+        createdByName || null,
       ]
     );
     

@@ -58,6 +58,7 @@ const menuItems: MenuItem[] = [
     label: 'ใบแจ้งหนี้',
     subItems: [
       { label: 'ใบแจ้งหนี้ทั้งหมด', href: '/invoices', icon: FileText },
+      { label: 'ใบกำกับภาษี', href: '/tax-invoices', icon: FileCheck },
       { label: 'รอชำระ', href: '/invoices/pending', icon: FileClock },
       { label: 'ชำระแล้ว', href: '/invoices/paid', icon: FileCheck },
       { label: 'เกินกำหนด', href: '/invoices/overdue', icon: FileX },

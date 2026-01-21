@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 export default function DashboardLayout({
   children,
@@ -31,23 +32,25 @@ export default function DashboardLayout({
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
-      
-      {/* Overlay for mobile */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={handleSidebarClose}
-        />
-      )}
-      
-      {/* Main content - no margin on mobile, margin on desktop */}
-      <div className="lg:pl-64 transition-all duration-300 min-h-screen">
-        <Header onMenuClick={handleMenuClick} />
-        <main className="p-3 sm:p-4 lg:p-6">{children}</main>
+    <AuthProvider>
+      <div className="min-h-screen bg-gray-50">
+        {/* Sidebar */}
+        <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
+        
+        {/* Overlay for mobile */}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+            onClick={handleSidebarClose}
+          />
+        )}
+        
+        {/* Main content - no margin on mobile, margin on desktop */}
+        <div className="lg:pl-64 transition-all duration-300 min-h-screen">
+          <Header onMenuClick={handleMenuClick} />
+          <main className="p-3 sm:p-4 lg:p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </AuthProvider>
   );
 }

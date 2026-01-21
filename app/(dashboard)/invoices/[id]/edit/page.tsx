@@ -10,6 +10,7 @@ import {
   ArrowLeft, Save, Plus, Trash2, CheckCircle, AlertCircle, DollarSign 
 } from 'lucide-react';
 import Link from 'next/link';
+import { useCurrentUser } from '@/contexts/AuthContext';
 
 interface InvoiceItem {
   id?: number;
@@ -34,6 +35,7 @@ interface Product {
 export default function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
+  const { userId, userName } = useCurrentUser();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -296,7 +298,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
         withholdingTax: totals.withholdingTax,
         depositAmount: depositAmount || 0,
         notes,
-        updatedById: 1, // TODO: Get from session
+        updatedById: userId,
+        updatedByName: userName,
       };
 
       const response = await fetch(`/api/invoices/${resolvedParams.id}`, {

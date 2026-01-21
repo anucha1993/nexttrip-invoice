@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, AlertCircle, CheckCircle } from 'lucide-react';
+import { useCurrentUser } from '@/contexts/AuthContext';
 
 interface InvoiceModalProps {
   quotation: {
@@ -57,6 +58,7 @@ interface QuotationData {
 }
 
 export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceModalProps) {
+  const { userId, userName } = useCurrentUser();
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string>('');
@@ -186,7 +188,8 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
           withholdingTax: invoiceWithholdingTax,
           depositAmount: depositAmount || 0,
           notes,
-          createdById: 1, // TODO: Get from session
+          createdById: userId,
+          createdByName: userName,
         }),
       });
 

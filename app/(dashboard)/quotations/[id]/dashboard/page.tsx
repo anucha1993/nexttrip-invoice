@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,11 @@ import {
   ArrowLeft, Pencil, FileText, Calendar, Users, DollarSign,
   Receipt, Wallet, ShoppingCart, TrendingUp, FileCheck, Upload, 
   ListChecks, PackageCheck, Plus, Eye, CheckCircle, Clock, Download,
-  Printer, XCircle, Trash2
+  Printer, XCircle, Trash2, ChevronDown, ChevronRight, User
 } from 'lucide-react';
 import Link from 'next/link';
 import InvoiceModal from '@/components/invoices/invoice-modal';
+import { useCurrentUser } from '@/contexts/AuthContext';
 
 export default function QuotationDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -22,6 +23,7 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
   const [quotation, setQuotation] = useState<any>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceRefreshKey, setInvoiceRefreshKey] = useState(0);
+  const [paymentRefreshKey, setPaymentRefreshKey] = useState(0);
 
   // อัพเดท URL เมื่อเปลี่ยน tab
   const handleTabChange = (tabId: string) => {
@@ -55,6 +57,12 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
     fetchQuotation();
     // Switch to invoice tab
     handleTabChange('invoice');
+  };
+
+  // เมื่อมีการชำระเงินหรือคืนเงิน - refresh ทั้ง invoice และ payment tabs
+  const handlePaymentChange = () => {
+    setInvoiceRefreshKey(prev => prev + 1);
+    setPaymentRefreshKey(prev => prev + 1);
   };
 
   if (loading) {
@@ -203,7 +211,7 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
         {activeTab === 'overview' && <OverviewTab quotation={quotation} />}
         {activeTab === 'quotation' && <QuotationTab quotation={quotation} quotationId={resolvedParams.id} />}
         {activeTab === 'invoice' && <InvoiceTab quotation={quotation} onCreateInvoice={() => setShowInvoiceModal(true)} refreshKey={invoiceRefreshKey} />}
-        {activeTab === 'customer-payment' && <CustomerPaymentTab />}
+        {activeTab === 'customer-payment' && <CustomerPaymentTab quotation={quotation} onPaymentChange={handlePaymentChange} refreshKey={paymentRefreshKey} />}
         {activeTab === 'wholesale-payment' && <WholesalePaymentTab />}
         {activeTab === 'tax' && <TaxTab />}
         {activeTab === 'cost' && <CostTab />}
@@ -276,11 +284,17 @@ function OverviewTab({ quotation }: { quotation: any }) {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-xs sm:text-sm text-gray-600">ชำระแล้ว</span>
-              <span className="font-bold text-sm sm:text-base text-green-600">0 ฿</span>
+              <span className="font-bold text-sm sm:text-base text-green-600">{(quotation.totalPaid || 0).toLocaleString()} ฿</span>
             </div>
+            {(quotation.totalRefunded || 0) > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-xs sm:text-sm text-gray-600">คืนเงิน</span>
+                <span className="font-bold text-sm sm:text-base text-red-600">{(quotation.totalRefunded || 0).toLocaleString()} ฿</span>
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-xs sm:text-sm text-gray-600">คงเหลือ</span>
-              <span className="font-bold text-sm sm:text-base text-orange-600">{quotation.grandTotal?.toLocaleString()} ฿</span>
+              <span className="font-bold text-sm sm:text-base text-orange-600">{(quotation.balanceAmount ?? quotation.grandTotal)?.toLocaleString()} ฿</span>
             </div>
           </CardContent>
         </Card>
@@ -296,26 +310,85 @@ function OverviewTab({ quotation }: { quotation: any }) {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            {/* ใบเสนอราคา - เสร็จแล้วเสมอ */}
             <div className="flex flex-col items-center p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
               <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-500 mb-1 sm:mb-2" />
               <p className="text-xs sm:text-sm text-center font-medium">ใบเสนอราคา</p>
               <p className="text-[10px] sm:text-xs text-green-600">เสร็จแล้ว</p>
             </div>
-            <div className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
-              <p className="text-xs sm:text-sm text-center font-medium">ใบแจ้งหนี้</p>
-              <p className="text-[10px] sm:text-xs text-gray-500">รอดำเนินการ</p>
-            </div>
-            <div className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
-              <p className="text-xs sm:text-sm text-center font-medium">การชำระเงิน</p>
-              <p className="text-[10px] sm:text-xs text-gray-500">รอดำเนินการ</p>
-            </div>
-            <div className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
-              <p className="text-xs sm:text-sm text-center font-medium">เอกสารครบ</p>
-              <p className="text-[10px] sm:text-xs text-gray-500">รอดำเนินการ</p>
-            </div>
+            
+            {/* ใบแจ้งหนี้ - ดูจาก totalInvoiced */}
+            {(quotation.totalInvoiced || 0) > 0 ? (
+              <div className="flex flex-col items-center p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+                <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-500 mb-1 sm:mb-2" />
+                <p className="text-xs sm:text-sm text-center font-medium">ใบแจ้งหนี้</p>
+                <p className="text-[10px] sm:text-xs text-green-600">
+                  {(quotation.totalInvoiced >= quotation.grandTotal) ? 'ครบแล้ว' : 'บางส่วน'}
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
+                <p className="text-xs sm:text-sm text-center font-medium">ใบแจ้งหนี้</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">รอดำเนินการ</p>
+              </div>
+            )}
+            
+            {/* การชำระเงิน - ดูจาก totalPaid และ balanceAmount */}
+            {(() => {
+              const paid = quotation.totalPaid || 0;
+              const balance = quotation.balanceAmount ?? quotation.grandTotal;
+              if (balance <= 0 && paid > 0) {
+                return (
+                  <div className="flex flex-col items-center p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+                    <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-500 mb-1 sm:mb-2" />
+                    <p className="text-xs sm:text-sm text-center font-medium">การชำระเงิน</p>
+                    <p className="text-[10px] sm:text-xs text-green-600">ชำระครบแล้ว</p>
+                  </div>
+                );
+              } else if (paid > 0) {
+                return (
+                  <div className="flex flex-col items-center p-3 sm:p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-500 mb-1 sm:mb-2" />
+                    <p className="text-xs sm:text-sm text-center font-medium">การชำระเงิน</p>
+                    <p className="text-[10px] sm:text-xs text-yellow-600">ชำระบางส่วน</p>
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
+                    <p className="text-xs sm:text-sm text-center font-medium">การชำระเงิน</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500">รอดำเนินการ</p>
+                  </div>
+                );
+              }
+            })()}
+            
+            {/* เอกสารครบ - ดูจากทุกเงื่อนไข */}
+            {(() => {
+              const invoiceComplete = (quotation.totalInvoiced || 0) >= quotation.grandTotal;
+              const paymentComplete = (quotation.balanceAmount ?? quotation.grandTotal) <= 0 && (quotation.totalPaid || 0) > 0;
+              const allComplete = invoiceComplete && paymentComplete;
+              
+              if (allComplete) {
+                return (
+                  <div className="flex flex-col items-center p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+                    <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-500 mb-1 sm:mb-2" />
+                    <p className="text-xs sm:text-sm text-center font-medium">เอกสารครบ</p>
+                    <p className="text-[10px] sm:text-xs text-green-600">เสร็จสมบูรณ์</p>
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="flex flex-col items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
+                    <p className="text-xs sm:text-sm text-center font-medium">เอกสารครบ</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500">รอดำเนินการ</p>
+                  </div>
+                );
+              }
+            })()}
           </div>
         </CardContent>
       </Card>
@@ -608,21 +681,42 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
 }
 
 function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any; onCreateInvoice: () => void; refreshKey?: number }) {
+  const { userId, userName } = useCurrentUser();
   const [activeDocType, setActiveDocType] = useState<'invoice' | 'receipt' | 'taxInvoice'>('invoice');
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [deletingInvoiceId, setDeletingInvoiceId] = useState<number | null>(null);
   const [hardDeletingInvoiceId, setHardDeletingInvoiceId] = useState<number | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+  const [issuingTaxInvoiceId, setIssuingTaxInvoiceId] = useState<number | null>(null);
+  const [cancellingTaxInvoiceId, setCancellingTaxInvoiceId] = useState<number | null>(null);
+  const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Set<number>>(new Set());
 
-  // Invoice status options
+  // Toggle expanded state for invoice
+  const toggleExpanded = (invoiceId: number) => {
+    setExpandedInvoiceIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(invoiceId)) {
+        newSet.delete(invoiceId);
+      } else {
+        newSet.add(invoiceId);
+      }
+      return newSet;
+    });
+  };
+
+  // Invoice status options - สถานะที่เลือกได้ด้วยตนเอง
   const statusOptions = [
     { value: 'DRAFT', label: 'ฉบับร่าง', color: 'bg-gray-100 text-gray-700 border-gray-300' },
     { value: 'ISSUED', label: 'ออกแล้ว', color: 'bg-blue-100 text-blue-700 border-blue-300' },
-    { value: 'PAID', label: 'ชำระแล้ว', color: 'bg-green-100 text-green-700 border-green-300' },
-    { value: 'PARTIAL_PAID', label: 'ชำระบางส่วน', color: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
     { value: 'CANCELLED', label: 'ยกเลิก', color: 'bg-red-100 text-red-700 border-red-300' },
   ];
+
+  // สถานะที่มาจากการชำระเงินจริง (อ่านอย่างเดียว)
+  const paymentStatuses: Record<string, { label: string; color: string }> = {
+    'PAID': { label: 'ชำระแล้ว', color: 'bg-green-100 text-green-700' },
+    'PARTIAL_PAID': { label: 'ชำระบางส่วน', color: 'bg-yellow-100 text-yellow-700' },
+  };
 
   // Function to update invoice status
   const handleStatusChange = async (invoiceId: number, newStatus: string) => {
@@ -663,7 +757,8 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cancelReason: 'ยกเลิกโดยผู้ใช้',
-          cancelledById: 1, // TODO: Get from session
+          cancelledById: userId,
+          cancelledByName: userName,
         }),
       });
 
@@ -720,9 +815,83 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
     }
   };
 
+  // Function to issue tax invoice
+  const handleIssueTaxInvoice = async (invoiceId: number, invoiceNumber: string) => {
+    const confirmed = window.confirm(`ต้องการออกใบกำกับภาษีสำหรับใบแจ้งหนี้ "${invoiceNumber}" ใช่หรือไม่?`);
+    if (!confirmed) return;
+
+    try {
+      setIssuingTaxInvoiceId(invoiceId);
+      const response = await fetch(`/api/invoices/${invoiceId}/issue-tax-invoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          issuedById: userId,
+          issuedByName: userName,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to issue tax invoice');
+      }
+
+      const result = await response.json();
+
+      // Refresh invoices list
+      const fetchResponse = await fetch(`/api/invoices?quotationId=${quotation.id}`);
+      if (fetchResponse.ok) {
+        const data = await fetchResponse.json();
+        setInvoices(data.invoices || []);
+      }
+
+      alert(`ออกใบกำกับภาษีเรียบร้อย: ${result.taxInvoiceNumber}`);
+    } catch (error: any) {
+      console.error('Error issuing tax invoice:', error);
+      alert(`ไม่สามารถออกใบกำกับภาษีได้: ${error.message}`);
+    } finally {
+      setIssuingTaxInvoiceId(null);
+    }
+  };
+
+  // Function to cancel tax invoice
+  const handleCancelTaxInvoice = async (invoiceId: number, taxInvoiceNumber: string) => {
+    const reason = window.prompt(`กรุณาระบุเหตุผลในการยกเลิกใบกำกับภาษี "${taxInvoiceNumber}":`);
+    if (reason === null) return; // User cancelled
+    if (!reason.trim()) {
+      alert('กรุณาระบุเหตุผลในการยกเลิก');
+      return;
+    }
+
+    try {
+      setCancellingTaxInvoiceId(invoiceId);
+      const response = await fetch(`/api/invoices/${invoiceId}/issue-tax-invoice?reason=${encodeURIComponent(reason)}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to cancel tax invoice');
+      }
+
+      // Refresh invoices list
+      const fetchResponse = await fetch(`/api/invoices?quotationId=${quotation.id}`);
+      if (fetchResponse.ok) {
+        const data = await fetchResponse.json();
+        setInvoices(data.invoices || []);
+      }
+
+      alert('ยกเลิกใบกำกับภาษีเรียบร้อยแล้ว');
+    } catch (error: any) {
+      console.error('Error cancelling tax invoice:', error);
+      alert(`ไม่สามารถยกเลิกใบกำกับภาษีได้: ${error.message}`);
+    } finally {
+      setCancellingTaxInvoiceId(null);
+    }
+  };
+
   const docTypes = [
     { id: 'invoice', label: 'ใบแจ้งหนี้', icon: FileText, color: 'blue' },
-    { id: 'receipt', label: 'ใบเสร็จรับเงิน', icon: Receipt, color: 'green' },
     { id: 'taxInvoice', label: 'ใบกำกับภาษี', icon: FileCheck, color: 'purple' },
   ];
 
@@ -748,9 +917,10 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
   // Calculate totals (exclude CANCELLED/VOIDED invoices)
   const activeInvoices = invoices.filter(inv => inv.status !== 'CANCELLED' && inv.status !== 'VOIDED');
   const totalInvoiced = activeInvoices.reduce((sum, inv) => sum + parseFloat(inv.grandTotal || 0), 0);
-  const totalPaid = invoices
-    .filter(inv => inv.status === 'PAID')
-    .reduce((sum, inv) => sum + parseFloat(inv.grandTotal || 0), 0);
+  // ยอดชำระเงินจริงจาก paidAmount ของ invoice (มาจาก customer_transactions)
+  const totalPaid = activeInvoices.reduce((sum, inv) => sum + parseFloat(inv.paidAmount || 0), 0);
+  // ยอดคืนเงินจริง
+  const totalRefunded = activeInvoices.reduce((sum, inv) => sum + parseFloat(inv.refundedAmount || 0), 0);
   const remaining = parseFloat(quotation.grandTotal || 0) - totalInvoiced;
   const isFullyInvoiced = remaining <= 0 || parseFloat(quotation.grandTotal || 0) <= 0;
 
@@ -764,8 +934,22 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
   };
 
   const getStatusSelect = (invoice: any) => {
-    const currentStatus = statusOptions.find(s => s.value === invoice.status) || statusOptions[0];
     const isUpdating = updatingStatusId === invoice.id;
+    
+    // สถานะ PAID/PARTIAL_PAID มาจากการชำระเงินจริง - แสดงเป็น Badge อย่างเดียว
+    if (invoice.status === 'PAID' || invoice.status === 'PARTIAL_PAID') {
+      const paymentStatus = paymentStatuses[invoice.status];
+      return (
+        <span 
+          className={`px-2 py-1 rounded-full text-xs font-medium ${paymentStatus.color}`}
+          title="สถานะนี้มาจากการชำระเงินจริง"
+        >
+          {paymentStatus.label}
+        </span>
+      );
+    }
+    
+    const currentStatus = statusOptions.find(s => s.value === invoice.status) || statusOptions[0];
     
     return (
       <select
@@ -799,7 +983,7 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
           <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
               <p className="text-xs sm:text-sm text-gray-600 mb-1">ออกใบแจ้งหนี้แล้ว</p>
-              <p className="text-lg sm:text-2xl font-bold text-green-600">{totalInvoiced.toLocaleString()} ฿</p>
+              <p className="text-lg sm:text-2xl font-bold text-purple-600">{totalInvoiced.toLocaleString()} ฿</p>
             </div>
           </CardContent>
         </Card>
@@ -807,15 +991,15 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
           <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
               <p className="text-xs sm:text-sm text-gray-600 mb-1">ชำระเงินแล้ว</p>
-              <p className="text-lg sm:text-2xl font-bold text-emerald-600">{totalPaid.toLocaleString()} ฿</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600">{totalPaid.toLocaleString()} ฿</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">คงเหลือ</p>
-              <p className="text-lg sm:text-2xl font-bold text-orange-600">{remaining.toLocaleString()} ฿</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ค้างชำระ</p>
+              <p className="text-lg sm:text-2xl font-bold text-orange-600">{Math.max(0, totalInvoiced - totalPaid + totalRefunded).toLocaleString()} ฿</p>
             </div>
           </CardContent>
         </Card>
@@ -938,106 +1122,178 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="text-left py-3 px-4 font-medium w-8"></th>
                       <th className="text-left py-3 px-4 font-medium">เลขที่</th>
                       <th className="text-left py-3 px-4 font-medium">วันที่ออก</th>
                       <th className="text-left py-3 px-4 font-medium">กำหนดชำระ</th>
                       <th className="text-right py-3 px-4 font-medium">จำนวนเงิน</th>
+                      <th className="text-left py-3 px-4 font-medium">ผู้สร้าง</th>
                       <th className="text-center py-3 px-4 font-medium">สถานะ</th>
                       <th className="text-center py-3 px-4 font-medium">จัดการ</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {invoices.map((invoice) => (
-                      <tr key={invoice.id} className="border-t border-gray-200 hover:bg-gray-50">
-                        <td className="py-3 px-4">
-                          <span className="font-medium text-blue-600">{invoice.invoiceNumber}</span>
-                        </td>
-                        <td className="py-3 px-4">{formatDate(invoice.invoiceDate)}</td>
-                        <td className="py-3 px-4">{formatDate(invoice.dueDate)}</td>
-                        <td className="py-3 px-4 text-right font-medium">
-                          {parseFloat(invoice.grandTotal || 0).toLocaleString()} ฿
-                        </td>
-                        <td className="py-3 px-4 text-center">{getStatusSelect(invoice)}</td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors cursor-pointer"
-                              onClick={() => window.open(`/invoices/${invoice.id}`, '_blank')}
-                              title="ดู"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors cursor-pointer"
-                              onClick={() => window.open(`/invoices/${invoice.id}/edit`, '_blank')}
-                              title="แก้ไข"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors cursor-pointer"
-                              onClick={() => alert('พิมพ์ Invoice')}
-                              title="พิมพ์"
-                            >
-                              <Printer className="w-4 h-4" />
-                            </button>
-                            {invoice.status !== 'CANCELLED' && invoice.status !== 'VOIDED' && (
+                    {invoices.map((invoice) => {
+                      const isExpanded = expandedInvoiceIds.has(invoice.id);
+                      const items = invoice.items || [];
+                      
+                      return (
+                        <Fragment key={invoice.id}>
+                          <tr className="border-t border-gray-200 hover:bg-gray-50">
+                            <td className="py-3 px-4">
                               <button
-                                className="p-1.5 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
-                                onClick={() => handleCancelInvoice(invoice.id, invoice.invoiceNumber)}
-                                disabled={deletingInvoiceId === invoice.id}
-                                title="ยกเลิก"
+                                onClick={() => toggleExpanded(invoice.id)}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-700"
                               >
-                                <XCircle className="w-4 h-4" />
+                                {isExpanded ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
                               </button>
-                            )}
-                            <button
-                              className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
-                              onClick={() => handleHardDeleteInvoice(invoice.id, invoice.invoiceNumber)}
-                              disabled={hardDeletingInvoiceId === invoice.id}
-                              title="ลบ"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="font-medium text-blue-600">{invoice.invoiceNumber}</span>
+                            </td>
+                            <td className="py-3 px-4">{formatDate(invoice.invoiceDate)}</td>
+                            <td className="py-3 px-4">{formatDate(invoice.dueDate)}</td>
+                            <td className="py-3 px-4 text-right font-medium">
+                              {parseFloat(invoice.grandTotal || 0).toLocaleString()} ฿
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5 text-gray-600">
+                                <User className="w-3.5 h-3.5" />
+                                <span className="text-sm">{invoice.createdByName || '-'}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center">{getStatusSelect(invoice)}</td>
+                            <td className="py-3 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                                  onClick={() => window.open(`/invoices/${invoice.id}`, '_blank')}
+                                  title="ดู"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors cursor-pointer"
+                                  onClick={() => window.open(`/invoices/${invoice.id}/edit`, '_blank')}
+                                  title="แก้ไข"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors cursor-pointer"
+                                  onClick={() => alert('พิมพ์ Invoice')}
+                                  title="พิมพ์"
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+                                {invoice.status !== 'CANCELLED' && invoice.status !== 'VOIDED' && (
+                                  <button
+                                    className="p-1.5 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                                    onClick={() => handleCancelInvoice(invoice.id, invoice.invoiceNumber)}
+                                    disabled={deletingInvoiceId === invoice.id}
+                                    title="ยกเลิก"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                  </button>
+                                )}
+                                <button
+                                  className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                                  onClick={() => handleHardDeleteInvoice(invoice.id, invoice.invoiceNumber)}
+                                  disabled={hardDeletingInvoiceId === invoice.id}
+                                  title="ลบ"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {/* Expanded Items Row */}
+                          {isExpanded && (
+                            <tr key={`${invoice.id}-items`} className="bg-gray-50">
+                              <td colSpan={8} className="py-3 px-4">
+                                <div className="ml-6 space-y-3">
+                                  {/* Items Table */}
+                                  <div className="bg-white rounded-lg border overflow-hidden">
+                                    <div className="bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">
+                                      รายการ ({items.length} รายการ)
+                                    </div>
+                                    {items.length > 0 ? (
+                                      <table className="w-full text-xs">
+                                        <thead className="bg-gray-100">
+                                          <tr>
+                                            <th className="text-left py-2 px-3 font-medium">#</th>
+                                            <th className="text-left py-2 px-3 font-medium">รายละเอียด</th>
+                                            <th className="text-right py-2 px-3 font-medium">จำนวน</th>
+                                            <th className="text-right py-2 px-3 font-medium">ราคา/หน่วย</th>
+                                            <th className="text-right py-2 px-3 font-medium">รวม</th>
+                                            <th className="text-center py-2 px-3 font-medium">VAT</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {items.map((item: any, idx: number) => (
+                                            <tr key={item.id} className="border-t hover:bg-gray-50">
+                                              <td className="py-2 px-3 text-gray-500">{idx + 1}</td>
+                                              <td className="py-2 px-3">{item.description}</td>
+                                              <td className="py-2 px-3 text-right">{item.quantity}</td>
+                                              <td className="py-2 px-3 text-right">{parseFloat(item.unitPrice).toLocaleString()}</td>
+                                              <td className="py-2 px-3 text-right font-medium">{parseFloat(item.amount).toLocaleString()}</td>
+                                              <td className="py-2 px-3 text-center">
+                                                <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                                  item.vatType === 'VAT' ? 'bg-green-100 text-green-700' :
+                                                  item.vatType === 'VAT_EXEMPT' ? 'bg-yellow-100 text-yellow-700' :
+                                                  'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                  {item.vatType === 'VAT' ? 'VAT 7%' : item.vatType === 'VAT_EXEMPT' ? 'ยกเว้น' : 'ไม่มี'}
+                                                </span>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    ) : (
+                                      <div className="text-center py-4 text-gray-500 text-sm">ไม่มีรายการ</div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Summary */}
+                                  <div className="bg-white rounded-lg border p-3">
+                                    <div className="flex justify-end">
+                                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                                        <div className="text-right">
+                                          <span className="text-gray-500 block">ยอดรวม:</span>
+                                          <span className="font-medium">{parseFloat(invoice.subtotal || 0).toLocaleString()} ฿</span>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="text-gray-500 block">ส่วนลด:</span>
+                                          <span className="font-medium text-red-600">-{parseFloat(invoice.discountAmount || 0).toLocaleString()} ฿</span>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="text-gray-500 block">VAT 7%:</span>
+                                          <span className="font-medium">{parseFloat(invoice.vatAmount || 0).toLocaleString()} ฿</span>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="text-gray-500 block">ยอดสุทธิ:</span>
+                                          <span className="font-bold text-blue-600">{parseFloat(invoice.grandTotal || 0).toLocaleString()} ฿</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
                 </div>
               </>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Receipt Section */}
-      {activeDocType === 'receipt' && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-green-600" />
-                ใบเสร็จรับเงิน (Receipt)
-              </h3>
-              <Button size="sm" disabled className="text-xs sm:text-sm">
-                <Plus className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">สร้างใบเสร็จ</span>
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4 mb-4">
-              <p className="text-xs sm:text-sm text-yellow-700">
-                <strong>หมายเหตุ:</strong> ใบเสร็จรับเงินต้องสร้างจากใบแจ้งหนี้ที่มีอยู่แล้ว
-              </p>
-            </div>
-            <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
-              <Receipt className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
-              <p className="font-medium text-sm sm:text-base">ยังไม่มีใบเสร็จรับเงิน</p>
-              <p className="text-xs sm:text-sm mt-1">สร้างใบแจ้งหนี้ก่อน แล้วค่อยออกใบเสร็จ</p>
-            </div>
           </CardContent>
         </Card>
       )}
@@ -1051,23 +1307,355 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
                 <FileCheck className="w-5 h-5 text-purple-600" />
                 ใบกำกับภาษี (Tax Invoice)
               </h3>
-              <Button size="sm" disabled className="text-xs sm:text-sm">
-                <Plus className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">สร้างใบกำกับภาษี</span>
-              </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4 mb-4">
-              <p className="text-xs sm:text-sm text-yellow-700">
-                <strong>หมายเหตุ:</strong> ใบกำกับภาษีต้องสร้างจากใบแจ้งหนี้ที่มีอยู่แล้ว
-              </p>
-            </div>
-            <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
-              <FileCheck className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
-              <p className="font-medium text-sm sm:text-base">ยังไม่มีใบกำกับภาษี</p>
-              <p className="text-xs sm:text-sm mt-1">สร้างใบแจ้งหนี้ก่อน แล้วค่อยออกใบกำกับภาษี</p>
-            </div>
+            {loadingInvoices ? (
+              <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
+            ) : (
+              <>
+                {/* Tax Invoices that have been issued */}
+                {(() => {
+                  const taxInvoices = invoices.filter(inv => inv.hasTaxInvoice && inv.taxInvoiceNumber);
+                  const invoicesWithoutTax = invoices.filter(
+                    inv => !inv.hasTaxInvoice && inv.status !== 'CANCELLED' && inv.status !== 'VOIDED' && inv.status !== 'DRAFT'
+                  );
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Issued Tax Invoices */}
+                      {taxInvoices.length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-sm text-gray-700 mb-3 flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            ใบกำกับภาษีที่ออกแล้ว ({taxInvoices.length} รายการ)
+                          </h4>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[600px]">
+                              <thead className="bg-purple-50">
+                                <tr>
+                                  <th className="text-left py-3 px-4 font-medium w-8"></th>
+                                  <th className="text-left py-3 px-4 font-medium">เลขที่ใบกำกับภาษี</th>
+                                  <th className="text-left py-3 px-4 font-medium">เลขที่ Invoice</th>
+                                  <th className="text-left py-3 px-4 font-medium">วันที่ออก</th>
+                                  <th className="text-right py-3 px-4 font-medium">จำนวนเงิน</th>
+                                  <th className="text-left py-3 px-4 font-medium">ผู้ออก</th>
+                                  <th className="text-center py-3 px-4 font-medium">จัดการ</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {taxInvoices.map((invoice) => {
+                                  const isExpanded = expandedInvoiceIds.has(invoice.id);
+                                  const items = invoice.items || [];
+                                  
+                                  return (
+                                    <Fragment key={invoice.id}>
+                                      <tr className="border-t hover:bg-gray-50">
+                                        <td className="py-3 px-4">
+                                          <button
+                                            onClick={() => toggleExpanded(invoice.id)}
+                                            className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-700"
+                                          >
+                                            {isExpanded ? (
+                                              <ChevronDown className="w-4 h-4" />
+                                            ) : (
+                                              <ChevronRight className="w-4 h-4" />
+                                            )}
+                                          </button>
+                                        </td>
+                                        <td className="py-3 px-4">
+                                          <span className="font-medium text-purple-600">{invoice.taxInvoiceNumber}</span>
+                                        </td>
+                                        <td className="py-3 px-4 text-gray-600">{invoice.invoiceNumber}</td>
+                                        <td className="py-3 px-4">{formatDate(invoice.taxInvoiceIssuedAt)}</td>
+                                        <td className="py-3 px-4 text-right font-medium">
+                                          {parseFloat(invoice.grandTotal || 0).toLocaleString()} ฿
+                                        </td>
+                                        <td className="py-3 px-4">
+                                          <div className="flex items-center gap-1.5 text-gray-600">
+                                            <User className="w-3.5 h-3.5" />
+                                            <span className="text-sm">{invoice.taxInvoiceIssuedByName || invoice.createdByName || '-'}</span>
+                                          </div>
+                                        </td>
+                                        <td className="py-3 px-4 text-center">
+                                          <div className="flex items-center justify-center gap-1">
+                                            <button
+                                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                                              onClick={() => window.open(`/invoices/${invoice.id}`, '_blank')}
+                                              title="ดู"
+                                            >
+                                              <Eye className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                              className="p-1.5 text-green-600 hover:bg-green-50 rounded cursor-pointer"
+                                              onClick={() => alert('พิมพ์ใบกำกับภาษี')}
+                                              title="พิมพ์"
+                                            >
+                                              <Printer className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                              className="p-1.5 text-red-600 hover:bg-red-50 rounded cursor-pointer disabled:opacity-50"
+                                              onClick={() => handleCancelTaxInvoice(invoice.id, invoice.taxInvoiceNumber)}
+                                              disabled={cancellingTaxInvoiceId === invoice.id}
+                                              title="ยกเลิก"
+                                            >
+                                              <XCircle className="w-4 h-4" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      {/* Expanded Items Row */}
+                                      {isExpanded && (
+                                        <tr key={`${invoice.id}-tax-items`} className="bg-purple-50/30">
+                                          <td colSpan={7} className="py-3 px-4">
+                                            <div className="ml-6 space-y-3">
+                                              {/* Items Table */}
+                                              <div className="bg-white rounded-lg border overflow-hidden">
+                                                <div className="bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700">
+                                                  รายการ ({items.length} รายการ)
+                                                </div>
+                                                {items.length > 0 ? (
+                                                  <table className="w-full text-xs">
+                                                    <thead className="bg-gray-100">
+                                                      <tr>
+                                                        <th className="text-left py-2 px-3 font-medium">#</th>
+                                                        <th className="text-left py-2 px-3 font-medium">รายละเอียด</th>
+                                                        <th className="text-right py-2 px-3 font-medium">จำนวน</th>
+                                                        <th className="text-right py-2 px-3 font-medium">ราคา/หน่วย</th>
+                                                        <th className="text-right py-2 px-3 font-medium">รวม</th>
+                                                        <th className="text-center py-2 px-3 font-medium">VAT</th>
+                                                      </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                      {items.map((item: any, idx: number) => (
+                                                        <tr key={item.id} className="border-t hover:bg-gray-50">
+                                                          <td className="py-2 px-3 text-gray-500">{idx + 1}</td>
+                                                          <td className="py-2 px-3">{item.description}</td>
+                                                          <td className="py-2 px-3 text-right">{item.quantity}</td>
+                                                          <td className="py-2 px-3 text-right">{parseFloat(item.unitPrice).toLocaleString()}</td>
+                                                          <td className="py-2 px-3 text-right font-medium">{parseFloat(item.amount).toLocaleString()}</td>
+                                                          <td className="py-2 px-3 text-center">
+                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                                              item.vatType === 'VAT' ? 'bg-green-100 text-green-700' :
+                                                              item.vatType === 'VAT_EXEMPT' ? 'bg-yellow-100 text-yellow-700' :
+                                                              'bg-gray-100 text-gray-600'
+                                                            }`}>
+                                                              {item.vatType === 'VAT' ? 'VAT 7%' : item.vatType === 'VAT_EXEMPT' ? 'ยกเว้น' : 'ไม่มี'}
+                                                            </span>
+                                                          </td>
+                                                        </tr>
+                                                      ))}
+                                                    </tbody>
+                                                  </table>
+                                                ) : (
+                                                  <div className="text-center py-4 text-gray-500 text-sm">ไม่มีรายการ</div>
+                                                )}
+                                              </div>
+                                              
+                                              {/* Summary */}
+                                              <div className="bg-white rounded-lg border p-3">
+                                                <div className="flex justify-end">
+                                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                                                    <div className="text-right">
+                                                      <span className="text-gray-500 block">ยอดรวม:</span>
+                                                      <span className="font-medium">{parseFloat(invoice.subtotal || 0).toLocaleString()} ฿</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <span className="text-gray-500 block">ส่วนลด:</span>
+                                                      <span className="font-medium text-red-600">-{parseFloat(invoice.discountAmount || 0).toLocaleString()} ฿</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <span className="text-gray-500 block">VAT 7%:</span>
+                                                      <span className="font-medium">{parseFloat(invoice.vatAmount || 0).toLocaleString()} ฿</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <span className="text-gray-500 block">ยอดสุทธิ:</span>
+                                                      <span className="font-bold text-purple-600">{parseFloat(invoice.grandTotal || 0).toLocaleString()} ฿</span>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </Fragment>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Invoices that can issue tax invoice */}
+                      {invoicesWithoutTax.length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-sm text-gray-700 mb-3 flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-orange-500" />
+                            ใบแจ้งหนี้ที่รอออกใบกำกับภาษี ({invoicesWithoutTax.length} รายการ)
+                          </h4>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[600px]">
+                              <thead className="bg-orange-50">
+                                <tr>
+                                  <th className="text-left py-3 px-4 font-medium w-8"></th>
+                                  <th className="text-left py-3 px-4 font-medium">เลขที่ Invoice</th>
+                                  <th className="text-left py-3 px-4 font-medium">วันที่</th>
+                                  <th className="text-right py-3 px-4 font-medium">จำนวนเงิน</th>
+                                  <th className="text-center py-3 px-4 font-medium">สถานะ</th>
+                                  <th className="text-center py-3 px-4 font-medium">ออกใบกำกับภาษี</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {invoicesWithoutTax.map((invoice) => {
+                                  const statusLabel = statusOptions.find(s => s.value === invoice.status);
+                                  const isExpanded = expandedInvoiceIds.has(invoice.id);
+                                  const items = invoice.items || [];
+                                  
+                                  return (
+                                    <Fragment key={invoice.id}>
+                                      <tr className="border-t hover:bg-gray-50">
+                                        <td className="py-3 px-4">
+                                          <button
+                                            onClick={() => toggleExpanded(invoice.id)}
+                                            className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-700"
+                                          >
+                                            {isExpanded ? (
+                                              <ChevronDown className="w-4 h-4" />
+                                            ) : (
+                                              <ChevronRight className="w-4 h-4" />
+                                            )}
+                                          </button>
+                                        </td>
+                                        <td className="py-3 px-4">
+                                          <span className="font-medium text-blue-600">{invoice.invoiceNumber}</span>
+                                        </td>
+                                        <td className="py-3 px-4">{formatDate(invoice.invoiceDate)}</td>
+                                        <td className="py-3 px-4 text-right font-medium">
+                                          {parseFloat(invoice.grandTotal || 0).toLocaleString()} ฿
+                                        </td>
+                                        <td className="py-3 px-4 text-center">
+                                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusLabel?.color || ''}`}>
+                                            {statusLabel?.label || invoice.status}
+                                          </span>
+                                        </td>
+                                        <td className="py-3 px-4 text-center">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-xs text-purple-600 border-purple-300 hover:bg-purple-50"
+                                            onClick={() => handleIssueTaxInvoice(invoice.id, invoice.invoiceNumber)}
+                                            disabled={issuingTaxInvoiceId === invoice.id}
+                                          >
+                                            {issuingTaxInvoiceId === invoice.id ? (
+                                              <span>กำลังออก...</span>
+                                            ) : (
+                                              <>
+                                                <FileCheck className="w-3 h-3 mr-1" />
+                                                ออกใบกำกับภาษี
+                                              </>
+                                            )}
+                                          </Button>
+                                        </td>
+                                      </tr>
+                                      {/* Expanded Items Row */}
+                                      {isExpanded && (
+                                        <tr key={`${invoice.id}-pending-items`} className="bg-orange-50/30">
+                                          <td colSpan={6} className="py-3 px-4">
+                                            <div className="ml-6 space-y-3">
+                                              {/* Items Table */}
+                                              <div className="bg-white rounded-lg border overflow-hidden">
+                                                <div className="bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700">
+                                                  รายการ ({items.length} รายการ)
+                                                </div>
+                                                {items.length > 0 ? (
+                                                  <table className="w-full text-xs">
+                                                    <thead className="bg-gray-100">
+                                                      <tr>
+                                                        <th className="text-left py-2 px-3 font-medium">#</th>
+                                                        <th className="text-left py-2 px-3 font-medium">รายละเอียด</th>
+                                                        <th className="text-right py-2 px-3 font-medium">จำนวน</th>
+                                                        <th className="text-right py-2 px-3 font-medium">ราคา/หน่วย</th>
+                                                        <th className="text-right py-2 px-3 font-medium">รวม</th>
+                                                        <th className="text-center py-2 px-3 font-medium">VAT</th>
+                                                      </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                      {items.map((item: any, idx: number) => (
+                                                        <tr key={item.id} className="border-t hover:bg-gray-50">
+                                                          <td className="py-2 px-3 text-gray-500">{idx + 1}</td>
+                                                          <td className="py-2 px-3">{item.description}</td>
+                                                          <td className="py-2 px-3 text-right">{item.quantity}</td>
+                                                          <td className="py-2 px-3 text-right">{parseFloat(item.unitPrice).toLocaleString()}</td>
+                                                          <td className="py-2 px-3 text-right font-medium">{parseFloat(item.amount).toLocaleString()}</td>
+                                                          <td className="py-2 px-3 text-center">
+                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                                              item.vatType === 'VAT' ? 'bg-green-100 text-green-700' :
+                                                              item.vatType === 'VAT_EXEMPT' ? 'bg-yellow-100 text-yellow-700' :
+                                                              'bg-gray-100 text-gray-600'
+                                                            }`}>
+                                                              {item.vatType === 'VAT' ? 'VAT 7%' : item.vatType === 'VAT_EXEMPT' ? 'ยกเว้น' : 'ไม่มี'}
+                                                            </span>
+                                                          </td>
+                                                        </tr>
+                                                      ))}
+                                                    </tbody>
+                                                  </table>
+                                                ) : (
+                                                  <div className="text-center py-4 text-gray-500 text-sm">ไม่มีรายการ</div>
+                                                )}
+                                              </div>
+                                              
+                                              {/* Summary */}
+                                              <div className="bg-white rounded-lg border p-3">
+                                                <div className="flex justify-end">
+                                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                                                    <div className="text-right">
+                                                      <span className="text-gray-500 block">ยอดรวม:</span>
+                                                      <span className="font-medium">{parseFloat(invoice.subtotal || 0).toLocaleString()} ฿</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <span className="text-gray-500 block">ส่วนลด:</span>
+                                                      <span className="font-medium text-red-600">-{parseFloat(invoice.discountAmount || 0).toLocaleString()} ฿</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <span className="text-gray-500 block">VAT 7%:</span>
+                                                      <span className="font-medium">{parseFloat(invoice.vatAmount || 0).toLocaleString()} ฿</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <span className="text-gray-500 block">ยอดสุทธิ:</span>
+                                                      <span className="font-bold text-orange-600">{parseFloat(invoice.grandTotal || 0).toLocaleString()} ฿</span>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </Fragment>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Empty state */}
+                      {taxInvoices.length === 0 && invoicesWithoutTax.length === 0 && (
+                        <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+                          <FileCheck className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+                          <p className="font-medium text-sm sm:text-base">ยังไม่มีใบกำกับภาษี</p>
+                          <p className="text-xs sm:text-sm mt-1">สร้างใบแจ้งหนี้และเปลี่ยนสถานะเป็น "ออกแล้ว" หรือ "ชำระแล้ว" ก่อน</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1075,44 +1663,934 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
   );
 }
 
-function CustomerPaymentTab() {
+function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotation: any; onPaymentChange?: () => void; refreshKey?: number }) {
+  const { userId, userName } = useCurrentUser();
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Banks and accounts
+  const [banks, setBanks] = useState<any[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+
+  // Form states
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('TRANSFER');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const [notes, setNotes] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  
+  // Transfer specific
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState('');
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [slipPreview, setSlipPreview] = useState<string | null>(null);
+  
+  // Cheque specific
+  const [chequeNumber, setChequeNumber] = useState('');
+  const [chequeDate, setChequeDate] = useState('');
+  const [chequeBankId, setChequeBankId] = useState('');
+
+  // Editing state
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchData();
+    fetchBanksAndAccounts();
+  }, [quotation.id, refreshKey]);
+
+  const fetchBanksAndAccounts = async () => {
+    try {
+      const [banksRes, accountsRes] = await Promise.all([
+        fetch('/api/banks'),
+        fetch('/api/bank-accounts'),
+      ]);
+      
+      if (banksRes.ok) {
+        const data = await banksRes.json();
+        setBanks(data.banks || []);
+      }
+      
+      if (accountsRes.ok) {
+        const data = await accountsRes.json();
+        setBankAccounts(data.bankAccounts || []);
+      }
+    } catch (error) {
+      console.error('Error fetching banks:', error);
+    }
+  };
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      // Fetch transactions
+      const txResponse = await fetch(`/api/customer-transactions?quotationId=${quotation.id}`);
+      if (txResponse.ok) {
+        const data = await txResponse.json();
+        setTransactions(data.transactions || []);
+      }
+      
+      // Fetch invoices for this quotation
+      const invResponse = await fetch(`/api/invoices?quotationId=${quotation.id}`);
+      if (invResponse.ok) {
+        const data = await invResponse.json();
+        setInvoices(data.invoices || []);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate totals
+  const totalInvoiced = invoices
+    .filter(inv => inv.status !== 'CANCELLED' && inv.status !== 'VOIDED')
+    .reduce((sum, inv) => sum + parseFloat(inv.grandTotal || 0), 0);
+  
+  const totalPaid = transactions
+    .filter(t => t.transactionType === 'PAYMENT' && t.status === 'CONFIRMED')
+    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+  
+  const totalRefunded = transactions
+    .filter(t => t.transactionType === 'REFUND' && t.status === 'CONFIRMED')
+    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+  
+  // คงเหลือ = ยอดใบแจ้งหนี้ - ยอดชำระสุทธิ (ชำระแล้ว - คืนเงิน)
+  // เมื่อคืนเงิน ยอดสุทธิที่ลูกค้าจ่ายจริงลดลง ทำให้คงเหลือเพิ่มขึ้น
+  const balance = Math.round((totalInvoiced - totalPaid + totalRefunded) * 100) / 100;
+
+  const handlePayment = async () => {
+    if (!selectedInvoice || !paymentAmount) {
+      alert('กรุณาเลือกใบแจ้งหนี้และระบุยอดเงิน');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      // Validate based on payment method
+      if (paymentMethod === 'TRANSFER' && !selectedBankAccountId) {
+        alert('กรุณาเลือกบัญชีธนาคาร');
+        setSubmitting(false);
+        return;
+      }
+      if (paymentMethod === 'CHEQUE' && (!chequeBankId || !chequeNumber || !chequeDate)) {
+        alert('กรุณากรอกข้อมูลเช็คให้ครบถ้วน');
+        setSubmitting(false);
+        return;
+      }
+      
+      // Upload slip if exists
+      let uploadedSlipUrl = null;
+      if (slipFile) {
+        const formData = new FormData();
+        formData.append('file', slipFile);
+        formData.append('folder', 'slips');
+        
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          uploadedSlipUrl = uploadData.url;
+        } else {
+          const uploadError = await uploadRes.json();
+          alert(uploadError.error || 'ไม่สามารถอัพโหลดสลิปได้');
+          setSubmitting(false);
+          return;
+        }
+      }
+      
+      const isEditing = editingTransactionId !== null;
+      const url = isEditing 
+        ? `/api/customer-transactions/${editingTransactionId}` 
+        : '/api/customer-transactions';
+      
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionType: 'PAYMENT',
+          invoiceId: selectedInvoice.id,
+          amount: parseFloat(parseFloat(paymentAmount).toFixed(2)),
+          paymentMethod,
+          paymentDate,
+          referenceNumber,
+          notes,
+          // Transfer specific
+          bankAccountId: paymentMethod === 'TRANSFER' ? parseInt(selectedBankAccountId) : null,
+          slipUrl: uploadedSlipUrl,
+          // Cheque specific
+          chequeNumber: paymentMethod === 'CHEQUE' ? chequeNumber : null,
+          chequeDate: paymentMethod === 'CHEQUE' ? chequeDate : null,
+          chequeBankId: paymentMethod === 'CHEQUE' ? parseInt(chequeBankId) : null,
+          // Auto-confirm if slip is attached
+          autoConfirm: !isEditing && !!uploadedSlipUrl,
+          // For edit mode: confirm when slip is newly attached
+          confirmOnSlip: isEditing && !!uploadedSlipUrl,
+          createdById: userId,
+          createdByName: userName,
+          updatedById: userId,
+          updatedByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || (isEditing ? 'แก้ไขเรียบร้อย' : 'บันทึกเรียบร้อย'));
+        setShowPaymentModal(false);
+        resetForm();
+        fetchData();
+        // Notify parent to refresh invoice tab
+        onPaymentChange?.();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึก');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!selectedInvoice || !paymentAmount || !refundReason) {
+      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      // Upload slip if exists
+      let uploadedSlipUrl = null;
+      if (slipFile) {
+        const formData = new FormData();
+        formData.append('file', slipFile);
+        formData.append('folder', 'slips');
+        
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          uploadedSlipUrl = uploadData.url;
+        } else {
+          const uploadError = await uploadRes.json();
+          alert(uploadError.error || 'ไม่สามารถอัพโหลดหลักฐานได้');
+          setSubmitting(false);
+          return;
+        }
+      }
+      
+      const isEditing = editingTransactionId !== null;
+      const url = isEditing 
+        ? `/api/customer-transactions/${editingTransactionId}` 
+        : '/api/customer-transactions';
+      
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionType: 'REFUND',
+          invoiceId: selectedInvoice.id,
+          amount: parseFloat(parseFloat(paymentAmount).toFixed(2)),
+          paymentMethod,
+          paymentDate,
+          referenceNumber,
+          refundReason,
+          notes,
+          slipUrl: uploadedSlipUrl,
+          // Auto-confirm if slip is attached
+          autoConfirm: !isEditing && !!uploadedSlipUrl,
+          // For edit mode: confirm when slip is newly attached
+          confirmOnSlip: isEditing && !!uploadedSlipUrl,
+          createdById: userId,
+          createdByName: userName,
+          updatedById: userId,
+          updatedByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || (isEditing ? 'แก้ไขเรียบร้อย' : 'บันทึกเรียบร้อย'));
+        setShowRefundModal(false);
+        resetForm();
+        fetchData();
+        // Notify parent to refresh invoice tab
+        onPaymentChange?.();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึก');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Confirm transaction
+  const handleConfirmTransaction = async (transactionId: number, transactionNumber: string) => {
+    const confirmed = window.confirm(`ต้องการยืนยันธุรกรรม "${transactionNumber}" ใช่หรือไม่?`);
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/customer-transactions/${transactionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'confirm',
+          confirmedById: userId,
+          confirmedByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || 'ยืนยันเรียบร้อย');
+        fetchData();
+        onPaymentChange?.();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการยืนยัน');
+    }
+  };
+
+  // Cancel transaction
+  const handleCancelTransaction = async (transactionId: number, transactionNumber: string) => {
+    const reason = window.prompt(`กรุณาระบุเหตุผลในการยกเลิกธุรกรรม "${transactionNumber}":`);
+    if (!reason) return;
+
+    try {
+      const response = await fetch(`/api/customer-transactions/${transactionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel',
+          cancelReason: reason,
+          cancelledById: userId,
+          cancelledByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || 'ยกเลิกเรียบร้อย');
+        fetchData();
+        onPaymentChange?.();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการยกเลิก');
+    }
+  };
+
+  // Edit transaction
+  const handleEditTransaction = (tx: any) => {
+    // Store editing transaction ID
+    setEditingTransactionId(tx.id);
+    
+    // Pre-fill form with transaction data
+    const inv = invoices.find(i => i.id === tx.invoiceId);
+    setSelectedInvoice(inv);
+    // Round amount to 2 decimal places
+    const amount = Math.round(parseFloat(tx.amount || 0) * 100) / 100;
+    setPaymentAmount(amount.toFixed(2));
+    setPaymentMethod(tx.paymentMethod || 'TRANSFER');
+    setPaymentDate(tx.paymentDate?.split('T')[0] || new Date().toISOString().split('T')[0]);
+    setReferenceNumber(tx.referenceNumber || '');
+    setNotes(tx.notes || '');
+    setSelectedBankAccountId(tx.bankAccountId?.toString() || '');
+    setChequeNumber(tx.chequeNumber || '');
+    setChequeDate(tx.chequeDate?.split('T')[0] || '');
+    setChequeBankId(tx.chequeBankId?.toString() || '');
+    
+    // Set slip preview if exists
+    if (tx.slipUrl) {
+      setSlipPreview(tx.slipUrl);
+    }
+    
+    if (tx.transactionType === 'PAYMENT') {
+      setShowPaymentModal(true);
+    } else {
+      setRefundReason(tx.refundReason || '');
+      setShowRefundModal(true);
+    }
+  };
+
+  const resetForm = () => {
+    setPaymentAmount('');
+    setPaymentMethod('TRANSFER');
+    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setReferenceNumber('');
+    setNotes('');
+    setRefundReason('');
+    setSelectedInvoice(null);
+    // Transfer specific
+    setSelectedBankAccountId('');
+    setSlipFile(null);
+    setSlipPreview(null);
+    // Cheque specific
+    setChequeNumber('');
+    setChequeDate('');
+    setChequeBankId('');
+    // Reset editing state
+    setEditingTransactionId(null);
+  };
+
+  const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSlipFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSlipPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('th-TH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      'PENDING': 'bg-yellow-100 text-yellow-700',
+      'CONFIRMED': 'bg-green-100 text-green-700',
+      'CANCELLED': 'bg-red-100 text-red-700',
+    };
+    const labels: Record<string, string> = {
+      'PENDING': 'รอยืนยัน',
+      'CONFIRMED': 'ยืนยันแล้ว',
+      'CANCELLED': 'ยกเลิก',
+    };
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || ''}`}>
+        {labels[status] || status}
+      </span>
+    );
+  };
+
+  // Get invoices that can receive payment
+  const payableInvoices = invoices.filter(
+    inv => inv.status !== 'CANCELLED' && inv.status !== 'VOIDED' && inv.status !== 'PAID'
+  );
+
+  // Get invoices that can be refunded (has payments)
+  const refundableInvoices = invoices.filter(
+    inv => parseFloat(inv.paidAmount || 0) > parseFloat(inv.refundedAmount || 0)
+  );
+
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
             <Wallet className="w-5 h-5" />
-            ระบบจัดการการชำระเงินลูกค้า
+            การชำระเงินลูกค้า
           </h3>
-          <Button size="sm" className="text-xs sm:text-sm">
-            <Plus className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">บันทึกการชำระเงิน</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              size="sm" 
+              className="text-xs sm:text-sm bg-green-600 hover:bg-green-700"
+              onClick={() => setShowPaymentModal(true)}
+              disabled={payableInvoices.length === 0}
+            >
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">บันทึกรับเงิน</span>
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="text-xs sm:text-sm text-red-600 border-red-300 hover:bg-red-50"
+              onClick={() => setShowRefundModal(true)}
+              disabled={refundableInvoices.length === 0}
+            >
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">บันทึกคืนเงิน</span>
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">ยอดทั้งหมด</p>
-              <p className="text-lg sm:text-2xl font-bold text-blue-600">0 ฿</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ยอดใบแจ้งหนี้</p>
+              <p className="text-lg sm:text-2xl font-bold text-blue-600">{totalInvoiced.toLocaleString()} ฿</p>
             </div>
             <div className="p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
               <p className="text-xs sm:text-sm text-gray-600 mb-1">ชำระแล้ว</p>
-              <p className="text-lg sm:text-2xl font-bold text-green-600">0 ฿</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600">{totalPaid.toLocaleString()} ฿</p>
             </div>
-            <div className="p-3 sm:p-4 bg-orange-50 rounded-lg border border-orange-200 col-span-2 lg:col-span-1">
+            <div className="p-3 sm:p-4 bg-red-50 rounded-lg border border-red-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">คืนเงิน</p>
+              <p className="text-lg sm:text-2xl font-bold text-red-600">{totalRefunded.toLocaleString()} ฿</p>
+            </div>
+            <div className="p-3 sm:p-4 bg-orange-50 rounded-lg border border-orange-200">
               <p className="text-xs sm:text-sm text-gray-600 mb-1">คงเหลือ</p>
-              <p className="text-lg sm:text-2xl font-bold text-orange-600">0 ฿</p>
+              <p className="text-lg sm:text-2xl font-bold text-orange-600">{balance.toLocaleString()} ฿</p>
             </div>
           </div>
-          <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
-            <Wallet className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
-            <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการชำระเงิน</p>
-            <p className="text-xs sm:text-sm mt-1">Module นี้พร้อมรอการพัฒนา</p>
-          </div>
+
+          {/* Transactions Table */}
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
+          ) : transactions.length === 0 ? (
+            <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <Wallet className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการชำระเงิน</p>
+              <p className="text-xs sm:text-sm mt-1">คลิกปุ่มบันทึกรับเงินเพื่อเริ่มต้น</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-3 px-4 font-medium">เลขที่</th>
+                    <th className="text-left py-3 px-4 font-medium">ประเภท</th>
+                    <th className="text-left py-3 px-4 font-medium">Invoice</th>
+                    <th className="text-left py-3 px-4 font-medium">วันที่</th>
+                    <th className="text-right py-3 px-4 font-medium">ยอดเงิน</th>
+                    <th className="text-left py-3 px-4 font-medium">วิธีชำระ</th>
+                    <th className="text-center py-3 px-4 font-medium">สถานะ</th>
+                    <th className="text-left py-3 px-4 font-medium">เอกสาร</th>
+                    <th className="text-left py-3 px-4 font-medium">ผู้บันทึก</th>
+                    <th className="text-center py-3 px-4 font-medium">สลิป</th>
+                    <th className="text-center py-3 px-4 font-medium">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="border-t hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <span className="font-medium text-blue-600">{tx.transactionNumber}</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          tx.transactionType === 'PAYMENT' 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {tx.transactionType === 'PAYMENT' ? 'รับเงิน' : 'คืนเงิน'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">{tx.invoiceNumber}</td>
+                      <td className="py-3 px-4">{formatDate(tx.paymentDate)}</td>
+                      <td className={`py-3 px-4 text-right font-medium ${
+                        tx.transactionType === 'PAYMENT' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {tx.transactionType === 'PAYMENT' ? '+' : '-'}
+                        {parseFloat(tx.amount).toLocaleString()} ฿
+                      </td>
+                      <td className="py-3 px-4">
+                        {(() => {
+                          const methodLabels: Record<string, string> = {
+                            'CASH': 'เงินสด',
+                            'TRANSFER': 'โอนเงิน',
+                            'CHEQUE': 'เช็ค',
+                            'CREDIT_CARD': 'บัตรเครดิต',
+                          };
+                          return (
+                            <span className="text-xs text-gray-700">
+                              {methodLabels[tx.paymentMethod] || tx.paymentMethod}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="py-3 px-4 text-center">{getStatusBadge(tx.status)}</td>
+                      <td className="py-3 px-4">
+                        {tx.receiptNumber && (
+                          <span className="text-green-600 text-xs">{tx.receiptNumber}</span>
+                        )}
+                        {tx.creditNoteNumber && (
+                          <span className="text-red-600 text-xs">{tx.creditNoteNumber}</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs text-gray-600">{tx.createdByName || '-'}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {tx.slipUrl ? (
+                          <a 
+                            href={tx.slipUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
+                          >
+                            <Eye className="w-3 h-3" />
+                            ดูสลิป
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1 justify-center">
+                          {tx.status === 'PENDING' && (
+                            <button
+                              onClick={() => handleConfirmTransaction(tx.id, tx.transactionNumber)}
+                              className="p-1 text-green-600 hover:bg-green-50 rounded"
+                              title="ยืนยัน"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          {tx.status !== 'CANCELLED' && (
+                            <>
+                              {/* Print button - mock up */}
+                              {tx.status === 'CONFIRMED' && (
+                                <button
+                                  onClick={() => alert('ฟีเจอร์พิมพ์เอกสารกำลังพัฒนา')}
+                                  className="p-1 text-purple-600 hover:bg-purple-50 rounded"
+                                  title="พิมพ์"
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleEditTransaction(tx)}
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                title="แก้ไข"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleCancelTransaction(tx.id, tx.transactionNumber)}
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                title="ยกเลิก"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </CardContent>
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold">{editingTransactionId ? 'แก้ไขรับเงิน' : 'บันทึกรับเงิน'}</h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">เลือกใบแจ้งหนี้ *</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={selectedInvoice?.id || ''}
+                  onChange={(e) => {
+                    const inv = payableInvoices.find(i => i.id === parseInt(e.target.value));
+                    setSelectedInvoice(inv);
+                    if (inv) {
+                      // คงเหลือ = grandTotal - paidAmount + refundedAmount
+                      const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
+                      setPaymentAmount(balance.toFixed(2));
+                    }
+                  }}
+                >
+                  <option value="">-- เลือก --</option>
+                  {payableInvoices.map(inv => {
+                    // คงเหลือ = grandTotal - paidAmount + refundedAmount
+                    const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
+                    return (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.invoiceNumber} - คงเหลือ {balance.toLocaleString()} ฿
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">ยอดเงิน *</label>
+                <input
+                  type="number" 
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">วิธีชำระ *</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                  <option value="CASH">เงินสด</option>
+                  <option value="TRANSFER">โอนเงิน</option>
+                  <option value="CHEQUE">เช็คธนาคาร</option>
+                  <option value="CREDIT_CARD">บัตรเครดิต</option>
+                </select>
+              </div>
+
+              {/* Conditional fields based on payment method */}
+              {paymentMethod === 'TRANSFER' && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">บัญชีธนาคารที่รับโอน *</label>
+                  <select
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={selectedBankAccountId}
+                    onChange={(e) => setSelectedBankAccountId(e.target.value)}
+                  >
+                    <option value="">-- เลือกบัญชี --</option>
+                    {bankAccounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {paymentMethod === 'CHEQUE' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">ธนาคารที่ออกเช็ค *</label>
+                    <select
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={chequeBankId}
+                      onChange={(e) => setChequeBankId(e.target.value)}
+                    >
+                      <option value="">-- เลือกธนาคาร --</option>
+                      {banks.map(bank => (
+                        <option key={bank.id} value={bank.id}>
+                          {bank.nameTH}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">เลขที่เช็ค *</label>
+                    <input
+                      type="text"
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={chequeNumber}
+                      onChange={(e) => setChequeNumber(e.target.value)}
+                      placeholder="เลขที่เช็ค"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">เช็คลงวันที่ *</label>
+                    <input
+                      type="date"
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={chequeDate}
+                      onChange={(e) => setChequeDate(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* แนบสลิป/หลักฐาน - ใช้ได้กับทุกวิธีชำระ */}
+              <div>
+                <label className="block text-sm font-medium mb-1">แนบสลิป/หลักฐาน</label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  onChange={handleSlipChange}
+                />
+                {slipPreview && (
+                  <div className="mt-2">
+                    {slipFile?.type === 'application/pdf' ? (
+                      <div className="flex items-center gap-2 p-2 bg-gray-100 rounded border">
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">{slipFile.name}</span>
+                      </div>
+                    ) : (
+                      <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">วันที่ชำระ</label>
+                <input
+                  type="date"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">เลขอ้างอิง / หมายเหตุ</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={referenceNumber}
+                  onChange={(e) => setReferenceNumber(e.target.value)}
+                  placeholder="เลขอ้างอิงอื่นๆ (ถ้ามี)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">หมายเหตุ</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setShowPaymentModal(false); resetForm(); }}>
+                ยกเลิก
+              </Button>
+              <Button onClick={handlePayment} disabled={submitting} className="bg-green-600 hover:bg-green-700">
+                {submitting ? 'กำลังบันทึก...' : (editingTransactionId ? 'บันทึกการแก้ไข' : 'บันทึกรับเงิน')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Modal */}
+      {showRefundModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold text-red-600">{editingTransactionId ? 'แก้ไขคืนเงิน' : 'บันทึกคืนเงิน'}</h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                ⚠️ การคืนเงินจะออกใบลดหนี้อัตโนมัติ
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">เลือกใบแจ้งหนี้ *</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={selectedInvoice?.id || ''}
+                  onChange={(e) => {
+                    const inv = refundableInvoices.find(i => i.id === parseInt(e.target.value));
+                    setSelectedInvoice(inv);
+                  }}
+                >
+                  <option value="">-- เลือก --</option>
+                  {refundableInvoices.map(inv => {
+                    const refundable = Math.round((parseFloat(inv.paidAmount || 0) - parseFloat(inv.refundedAmount || 0)) * 100) / 100;
+                    return (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.invoiceNumber} - ชำระแล้ว {refundable.toLocaleString()} ฿
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">ยอดคืนเงิน *</label>
+                <input
+                  type="number"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">เหตุผลในการคืนเงิน *</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  rows={2}
+                  placeholder="ระบุเหตุผล..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">วิธีคืนเงิน</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                  <option value="CASH">เงินสด</option>
+                  <option value="TRANSFER">โอนเงิน</option>
+                  <option value="CHEQUE">เช็คธนาคาร</option>
+                </select>
+              </div>
+              {/* แนบสลิป/หลักฐานคืนเงิน */}
+              <div>
+                <label className="block text-sm font-medium mb-1">แนบสลิป/หลักฐาน</label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  onChange={handleSlipChange}
+                />
+                {slipPreview && (
+                  <div className="mt-2">
+                    {slipFile?.type === 'application/pdf' ? (
+                      <div className="flex items-center gap-2 p-2 bg-gray-100 rounded border">
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">{slipFile.name}</span>
+                      </div>
+                    ) : (
+                      <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
+                    )}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">วันที่คืนเงิน</label>
+                <input
+                  type="date"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setShowRefundModal(false); resetForm(); }}>
+                ยกเลิก
+              </Button>
+              <Button onClick={handleRefund} disabled={submitting} className="bg-red-600 hover:bg-red-700">
+                {submitting ? 'กำลังบันทึก...' : (editingTransactionId ? 'บันทึกการแก้ไข' : 'บันทึกคืนเงิน')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
