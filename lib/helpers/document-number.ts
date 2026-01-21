@@ -120,6 +120,8 @@ export async function isDocumentNumberExists(
       tableName = 'tax_invoices';
       columnName = 'taxInvoiceNumber';
       break;
+    default:
+      throw new Error(`Unknown document type: ${type}`);
   }
   
   const rows = await conn.query(
