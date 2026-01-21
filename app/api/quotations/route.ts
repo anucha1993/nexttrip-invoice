@@ -15,9 +15,10 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '15');
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
+    const customerId = searchParams.get('customerId') || '';
     const offset = (page - 1) * limit;
 
-    console.log('🔍 Query params:', { page, limit, search, status });
+    console.log('🔍 Query params:', { page, limit, search, status, customerId });
 
     console.log('🔌 Getting database connection...');
     conn = await pool.getConnection();
@@ -36,6 +37,11 @@ export async function GET(request: NextRequest) {
     if (status) {
       whereClause += ` AND q.status = ?`;
       params.push(status);
+    }
+
+    if (customerId) {
+      whereClause += ` AND q.customerId = ?`;
+      params.push(customerId);
     }
 
     // Count total
@@ -73,7 +79,21 @@ export async function GET(request: NextRequest) {
         q.saleId,
         c.id as customerId,
         c.name as customerName,
-        c.phone as customerPhone
+        c.phone as customerPhone,
+        COALESCE((
+          SELECT SUM(i.grandTotal) 
+          FROM invoices i 
+          WHERE i.quotationId = q.id 
+            AND i.status != 'CANCELLED' 
+            AND i.status != 'VOIDED'
+        ), 0) as totalInvoiced,
+        (q.grandTotal - COALESCE((
+          SELECT SUM(i.grandTotal) 
+          FROM invoices i 
+          WHERE i.quotationId = q.id 
+            AND i.status != 'CANCELLED' 
+            AND i.status != 'VOIDED'
+        ), 0)) as remainingAmount
       FROM quotations q
       LEFT JOIN customers c ON q.customerId = c.id
       LEFT JOIN num_days nd ON q.numDays = nd.num_day_id

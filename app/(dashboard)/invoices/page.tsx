@@ -41,6 +41,7 @@ export default function InvoicesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -101,6 +102,34 @@ export default function InvoicesPage() {
       month: '2-digit',
       year: 'numeric',
     });
+  };
+
+  const handleDelete = async (invoiceId: number, invoiceNumber: string) => {
+    if (!confirm(`⚠️ คำเตือน: การลบนี้จะลบข้อมูลออกจากฐานข้อมูลถาวร!\n\nต้องการลบใบแจ้งหนี้ ${invoiceNumber} ใช่หรือไม่?`)) {
+      return;
+    }
+
+    setDeleting(invoiceId);
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}?hardDelete=true`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Refresh the list
+        setInvoices(invoices.filter(inv => inv.id !== invoiceId));
+        setOpenMenu(null);
+        alert('ลบใบแจ้งหนี้สำเร็จ');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาดในการลบใบแจ้งหนี้');
+      }
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      alert('เกิดข้อผิดพลาดในการลบใบแจ้งหนี้');
+    } finally {
+      setDeleting(null);
+    }
   };
 
   // Filter by search query (client-side)
@@ -197,7 +226,10 @@ export default function InvoicesPage() {
           </h1>
           <p className="text-gray-500 mt-2 ml-12">จัดการใบแจ้งหนี้และติดตามการชำระเงิน</p>
         </div>
-        <Button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25">
+        <Button 
+          onClick={() => router.push('/invoices/create')}
+          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25"
+        >
           <Plus className="w-4 h-4 mr-2" />
           สร้างใบแจ้งหนี้
         </Button>
@@ -423,9 +455,13 @@ export default function InvoicesPage() {
                               แก้ไข
                             </button>
                             <div className="border-t border-gray-100 my-1"></div>
-                            <button className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                            <button 
+                              onClick={() => handleDelete(invoice.id, invoice.invoiceNumber)}
+                              disabled={deleting === invoice.id}
+                              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
                               <Trash2 className="w-4 h-4" />
-                              ลบ
+                              {deleting === invoice.id ? 'กำลังลบ...' : 'ลบ'}
                             </button>
                           </div>
                         )}

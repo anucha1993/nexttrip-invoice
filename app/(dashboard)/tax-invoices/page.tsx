@@ -200,6 +200,13 @@ export default function TaxInvoicesPage() {
           </h1>
           <p className="text-gray-500 mt-2 ml-12">จัดการใบกำกับภาษีทั้งหมดในระบบ</p>
         </div>
+        <Button 
+          onClick={() => router.push('/tax-invoices/create')}
+          className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-lg shadow-purple-500/25"
+        >
+          <FileCheck className="w-4 h-4 mr-2" />
+          ออกใบกำกับภาษี
+        </Button>
       </div>
 
       {/* Summary Cards */}

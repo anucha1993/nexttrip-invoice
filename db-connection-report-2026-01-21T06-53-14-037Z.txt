@@ -1,0 +1,46 @@
+══════════════════════════════════════════════════════════════════════
+  DATABASE CONNECTION TEST REPORT
+══════════════════════════════════════════════════════════════════════
+
+▶ TEST INFORMATION
+──────────────────────────────────────────────────
+  Test Time (UTC)  : 2026-01-21T06:53:08.912Z
+  Test Time (TH)   : 21/1/2569 13:53:08
+  Hostname         : PC-TFG091
+  Platform         : win32 10.0.26100
+
+▶ CLIENT IP ADDRESSES
+──────────────────────────────────────────────────
+  Ethernet             : 162.15.40.26
+  vEthernet (Default Switch) : 172.28.0.1
+
+▶ TARGET DATABASE
+──────────────────────────────────────────────────
+  Host             : 103.80.48.25
+  Port             : 3306
+  Database         : nexttrip_invoice
+  User             : mailfore_nexttrip_invoice
+
+▶ TEST RESULTS
+──────────────────────────────────────────────────
+  1. TCP Connection : ❌ FAIL
+     Error          : Connection timeout (5s)
+  2. MariaDB Auth   : ⏭️  SKIPPED (TCP failed)
+
+▶ DIAGNOSIS
+──────────────────────────────────────────────────
+  ❌ ไม่สามารถเชื่อมต่อ TCP ไปยัง Server ได้
+
+  สาเหตุที่เป็นไปได้:
+  • Firewall ปิดกั้น Port 3306
+  • IP Address ของ Client ยังไม่ได้ Whitelist
+  • Database Server หยุดทำงาน
+
+  ▶ ACTION REQUIRED:
+  รบกวน Whitelist IP Address ต่อไปนี้:
+    → 162.15.40.26
+    → 172.28.0.1
+
+══════════════════════════════════════════════════════════════════════
+  END OF REPORT
+══════════════════════════════════════════════════════════════════════

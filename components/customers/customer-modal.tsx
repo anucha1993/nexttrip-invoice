@@ -3,7 +3,19 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { X } from 'lucide-react';
+
+const sourceOptions = [
+  { value: '', label: '-- เลือกที่มา --' },
+  { value: 'google', label: 'Google' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'line', label: 'LINE' },
+  { value: 'website', label: 'Website' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'referral', label: 'แนะนำ' },
+  { value: 'other', label: 'อื่นๆ' },
+];
 
 interface Customer {
   id: string;
@@ -14,9 +26,12 @@ interface Customer {
   taxId: string | null;
   address: string | null;
   fax: string | null;
+  socialId: string | null;
+  source: string | null;
   contactName: string | null;
   contactPhone: string | null;
   notes: string | null;
+  isActive: boolean;
 }
 
 interface CustomerModalProps {
@@ -35,10 +50,13 @@ export function CustomerModal({ isOpen, onClose, customer, onSave, mode }: Custo
     email: '',
     phone: '',
     fax: '',
+    socialId: '',
     address: '',
+    source: '',
     contactName: '',
     contactPhone: '',
     notes: '',
+    isActive: true,
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -52,10 +70,13 @@ export function CustomerModal({ isOpen, onClose, customer, onSave, mode }: Custo
         email: customer.email || '',
         phone: customer.phone || '',
         fax: customer.fax || '',
+        socialId: customer.socialId || '',
         address: customer.address || '',
+        source: customer.source || '',
         contactName: customer.contactName || '',
         contactPhone: customer.contactPhone || '',
         notes: customer.notes || '',
+        isActive: customer.isActive ?? true,
       });
     } else {
       // Reset form for create mode
@@ -66,10 +87,13 @@ export function CustomerModal({ isOpen, onClose, customer, onSave, mode }: Custo
         email: '',
         phone: '',
         fax: '',
+        socialId: '',
         address: '',
+        source: '',
         contactName: '',
         contactPhone: '',
         notes: '',
+        isActive: true,
       });
     }
   }, [customer, mode, isOpen]);
@@ -141,11 +165,15 @@ export function CustomerModal({ isOpen, onClose, customer, onSave, mode }: Custo
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 รหัสลูกค้า
               </label>
-              <Input
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                placeholder="CUS0001"
-              />
+              {mode === 'edit' && formData.code ? (
+                <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 font-medium">
+                  {formData.code}
+                </div>
+              ) : (
+                <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-500">
+                  สร้างอัตโนมัติ (CUSxxxx)
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -196,6 +224,7 @@ export function CustomerModal({ isOpen, onClose, customer, onSave, mode }: Custo
                 value={formData.taxId}
                 onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
                 placeholder="1234567890123"
+                maxLength={13}
               />
             </div>
             <div>
@@ -207,6 +236,34 @@ export function CustomerModal({ isOpen, onClose, customer, onSave, mode }: Custo
                 onChange={(e) => setFormData({ ...formData, fax: e.target.value })}
                 placeholder="021234567"
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Social ID
+              </label>
+              <Input
+                value={formData.socialId}
+                onChange={(e) => setFormData({ ...formData, socialId: e.target.value })}
+                placeholder="เช่น LINE ID, Facebook, etc."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ที่มาของลูกค้า
+              </label>
+              <Select
+                value={formData.source}
+                onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+              >
+                {sourceOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
 
@@ -257,6 +314,19 @@ export function CustomerModal({ isOpen, onClose, customer, onSave, mode }: Custo
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              สถานะ
+            </label>
+            <Select
+              value={formData.isActive ? 'true' : 'false'}
+              onChange={(e) => setFormData({ ...formData, isActive: e.target.value === 'true' })}
+            >
+              <option value="true">ใช้งาน</option>
+              <option value="false">ปิดใช้งาน</option>
+            </Select>
           </div>
 
           <div className="flex gap-2 justify-end pt-4 border-t border-gray-200">

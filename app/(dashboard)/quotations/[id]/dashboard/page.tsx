@@ -8,7 +8,7 @@ import {
   ArrowLeft, Pencil, FileText, Calendar, Users, DollarSign,
   Receipt, Wallet, ShoppingCart, TrendingUp, FileCheck, Upload, 
   ListChecks, PackageCheck, Plus, Eye, CheckCircle, Clock, Download,
-  Printer, XCircle, Trash2, ChevronDown, ChevronRight, User
+  Printer, XCircle, Trash2, ChevronDown, ChevronRight, User, CreditCard
 } from 'lucide-react';
 import Link from 'next/link';
 import InvoiceModal from '@/components/invoices/invoice-modal';
@@ -347,6 +347,7 @@ function OverviewTab({ quotation }: { quotation: any }) {
                   </div>
                 );
               } else if (paid > 0) {
+                /// 
                 return (
                   <div className="flex flex-col items-center p-3 sm:p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                     <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-500 mb-1 sm:mb-2" />
@@ -1669,6 +1670,10 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
+  const [showPaymentLinkModal, setShowPaymentLinkModal] = useState(false);
+  const [showSelectInvoiceModal, setShowSelectInvoiceModal] = useState(false);
+  const [paymentLink, setPaymentLink] = useState<any>(null);
+  const [creatingLink, setCreatingLink] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -2071,6 +2076,51 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
     }
   };
 
+  const handleCreatePaymentLink = async () => {
+    setCreatingLink(true);
+    try {
+      // ใช้ invoice ที่เลือกจาก modal หรือคำนวณ amount จาก balance
+      const amount = selectedInvoice 
+        ? parseFloat(selectedInvoice.balanceAmount || selectedInvoice.grandTotal)
+        : (balance > 0 ? balance : quotation.grandTotal);
+
+      const res = await fetch('/api/payment-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quotationId: quotation.id,
+          invoiceId: selectedInvoice?.id || null,
+          amount: amount,
+          description: selectedInvoice 
+            ? `ชำระใบแจ้งหนี้ ${selectedInvoice.invoiceNumber} - ${quotation.customerName}`
+            : `ชำระค่าแพ็คเกจ ${quotation.tourName || ''} - ${quotation.customerName}`,
+          expiresInHours: 72,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setPaymentLink(data);
+        setShowSelectInvoiceModal(false);
+        setShowPaymentLinkModal(true);
+      } else {
+        alert(data.error || 'ไม่สามารถสร้าง Payment Link ได้');
+      }
+    } catch (error) {
+      console.error('Error creating payment link:', error);
+      alert('เกิดข้อผิดพลาด');
+    } finally {
+      setCreatingLink(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (paymentLink?.paymentUrl) {
+      navigator.clipboard.writeText(paymentLink.paymentUrl);
+      alert('คัดลอกลิงก์แล้ว!');
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('th-TH', {
@@ -2116,7 +2166,21 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
             <Wallet className="w-5 h-5" />
             การชำระเงินลูกค้า
           </h3>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              size="sm" 
+              className="text-xs sm:text-sm bg-blue-600 hover:bg-blue-700"
+              onClick={() => setShowSelectInvoiceModal(true)}
+              disabled={creatingLink}
+            >
+              <CreditCard className="w-4 h-4 sm:mr-2" />
+              {creatingLink ? 'กำลังสร้าง...' : (
+                <>
+                  <span className="hidden sm:inline">สร้าง Payment Link</span>
+                  <span className="sm:hidden">Link</span>
+                </>
+              )}
+            </Button>
             <Button 
               size="sm" 
               className="text-xs sm:text-sm bg-green-600 hover:bg-green-700"
@@ -2125,6 +2189,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
             >
               <Plus className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">บันทึกรับเงิน</span>
+              <span className="sm:hidden">รับเงิน</span>
             </Button>
             <Button 
               size="sm" 
@@ -2135,6 +2200,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
             >
               <Plus className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">บันทึกคืนเงิน</span>
+              <span className="sm:hidden">คืนเงิน</span>
             </Button>
           </div>
         </div>
@@ -2587,6 +2653,240 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
               <Button onClick={handleRefund} disabled={submitting} className="bg-red-600 hover:bg-red-700">
                 {submitting ? 'กำลังบันทึก...' : (editingTransactionId ? 'บันทึกการแก้ไข' : 'บันทึกคืนเงิน')}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Selection Modal */}
+      {showSelectInvoiceModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">เลือกใบแจ้งหนี้สำหรับ Payment Link</h2>
+              <button onClick={() => setShowSelectInvoiceModal(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* Invoice List */}
+              <div className="space-y-3">
+                {invoices.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>ยังไม่มีใบแจ้งหนี้</p>
+                  </div>
+                ) : (
+                  invoices
+                    .filter(inv => inv.status !== 'CANCELLED' && inv.status !== 'VOIDED')
+                    .map((invoice) => {
+                      const balance = parseFloat(invoice.balanceAmount || invoice.grandTotal);
+                      const isPaid = invoice.status === 'PAID' || balance <= 0;
+                      
+                      return (
+                        <div
+                          key={invoice.id}
+                          onClick={() => !isPaid && setSelectedInvoice(invoice)}
+                          className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                            selectedInvoice?.id === invoice.id
+                              ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                              : isPaid
+                              ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                              : 'border-gray-300 hover:border-blue-300 hover:bg-blue-50/50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="w-4 h-4 text-blue-600" />
+                                <span className="font-semibold text-gray-900">
+                                  {invoice.invoiceNumber || `INV-${invoice.id}`}
+                                </span>
+                                {getStatusBadge(invoice.status)}
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                <div>
+                                  <span className="text-gray-500">วันที่:</span>
+                                  <span className="ml-2 text-gray-900">
+                                    {new Date(invoice.invoiceDate).toLocaleDateString('th-TH')}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">ยอดรวม:</span>
+                                  <span className="ml-2 text-gray-900 font-medium">
+                                    ฿{parseFloat(invoice.grandTotal).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">ชำระแล้ว:</span>
+                                  <span className="ml-2 text-green-600 font-medium">
+                                    ฿{parseFloat(invoice.paidAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">คงเหลือ:</span>
+                                  <span className={`ml-2 font-bold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    ฿{balance.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Radio indicator */}
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ml-3 ${
+                              selectedInvoice?.id === invoice.id
+                                ? 'border-blue-500 bg-blue-500'
+                                : isPaid
+                                ? 'border-gray-300 bg-gray-100'
+                                : 'border-gray-300'
+                            }`}>
+                              {selectedInvoice?.id === invoice.id && (
+                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+
+              {/* Summary */}
+              {selectedInvoice && (
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <p className="text-sm text-blue-800 mb-2">จะสร้าง Payment Link สำหรับ:</p>
+                  <p className="font-semibold text-blue-900">
+                    {selectedInvoice.invoiceNumber} - ยอด ฿{parseFloat(
+                      selectedInvoice.balanceAmount || selectedInvoice.grandTotal
+                    ).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4 border-t">
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setShowSelectInvoiceModal(false);
+                    setSelectedInvoice(null);
+                  }}
+                  className="flex-1"
+                >
+                  ยกเลิก
+                </Button>
+                <Button 
+                  onClick={handleCreatePaymentLink}
+                  disabled={!selectedInvoice || creatingLink}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  {creatingLink ? (
+                    <>
+                      <span className="animate-spin mr-2">⏳</span>
+                      กำลังสร้าง...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      สร้าง Payment Link
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Link Modal */}
+      {showPaymentLinkModal && paymentLink && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Payment Link สำเร็จ</h2>
+              <button onClick={() => setShowPaymentLinkModal(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* QR Code */}
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-3">สแกน QR Code เพื่อเปิดหน้าชำระเงิน</p>
+                <div className="bg-white p-4 rounded-xl border-2 border-blue-200 inline-block">
+                  <img src={paymentLink.qrCodeUrl} alt="Payment Link QR Code" className="w-64 h-64" />
+                </div>
+              </div>
+
+              {/* Link */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ลิงก์สำหรับส่งให้ลูกค้า
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={paymentLink.paymentUrl}
+                    readOnly
+                    className="flex-1 px-3 py-2 border rounded-lg bg-gray-50 text-sm"
+                  />
+                  <Button onClick={handleCopyLink} size="sm">
+                    คัดลอก
+                  </Button>
+                </div>
+              </div>
+
+              {/* Amount */}
+              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                <p className="text-sm text-gray-600">ยอดชำระ</p>
+                <p className="text-2xl font-bold text-green-600">
+                  ฿{parseFloat(paymentLink.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+
+              {/* Expiry */}
+              <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                <div className="flex items-center gap-2 text-sm text-orange-700">
+                  <Clock className="w-4 h-4" />
+                  <span>ลิงก์หมดอายุ: {new Date(paymentLink.expiresAt).toLocaleDateString('th-TH', {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}</span>
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="bg-blue-50 rounded-lg p-4">
+                <p className="font-medium text-blue-800 mb-2">วิธีใช้งาน:</p>
+                <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
+                  <li>คัดลอกลิงก์ด้านบน</li>
+                  <li>ส่งให้ลูกค้าผ่าน LINE, Email หรือ SMS</li>
+                  <li>ลูกค้ากดลิงก์และเลือกวิธีชำระเงินเอง</li>
+                  <li>ระบบจะอัปเดตสถานะอัตโนมัติเมื่อชำระเรียบร้อย</li>
+                </ol>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => window.open(paymentLink.paymentUrl, '_blank')}
+                  className="flex-1"
+                  variant="outline"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  ดูหน้าชำระเงิน
+                </Button>
+                <Button 
+                  onClick={() => setShowPaymentLinkModal(false)}
+                  className="flex-1"
+                >
+                  ปิด
+                </Button>
+              </div>
             </div>
           </div>
         </div>

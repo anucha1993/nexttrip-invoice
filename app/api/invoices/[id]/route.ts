@@ -319,8 +319,18 @@ export async function DELETE(
       });
     } else {
       // Soft delete - Cancel invoice
-      const body = await request.json();
-      const { cancelReason, cancelledById } = body;
+      let cancelReason = 'ลบโดยผู้ใช้';
+      let cancelledById = null;
+      
+      // Try to parse body if exists
+      try {
+        const body = await request.json();
+        cancelReason = body.cancelReason || cancelReason;
+        cancelledById = body.cancelledById || null;
+      } catch (e) {
+        // No body provided, use defaults
+        console.log('No body provided for DELETE, using defaults');
+      }
       
       // Validation: ตรวจสอบว่าสามารถ Cancel ได้
       const validation = await canCancelInvoice(invoiceId, connection);

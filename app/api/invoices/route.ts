@@ -25,13 +25,15 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
     
-    // Build query
+    // Build query with additional fields
     let query = `
       SELECT 
         i.*,
         q.quotationNumber,
         q.tourName,
-        cust.name as customerName
+        q.customerId,
+        cust.name as customerName,
+        cust.code as customerCode
       FROM invoices i
       LEFT JOIN quotations q ON i.quotationId = q.id
       LEFT JOIN customers cust ON q.customerId = cust.id
@@ -43,6 +45,13 @@ export async function GET(request: NextRequest) {
     if (quotationId) {
       query += ' AND i.quotationId = ?';
       params.push(quotationId);
+    }
+    
+    // Add customerId filter
+    const customerId = searchParams.get('customerId');
+    if (customerId) {
+      query += ' AND q.customerId = ?';
+      params.push(customerId);
     }
     
     if (status) {
@@ -70,6 +79,12 @@ export async function GET(request: NextRequest) {
     if (quotationId) {
       countQuery += ' AND i.quotationId = ?';
       countParams.push(quotationId);
+    }
+    
+    // Add customerId filter to count
+    if (customerId) {
+      countQuery += ' AND q.customerId = ?';
+      countParams.push(customerId);
     }
     
     if (status) {
@@ -132,7 +147,19 @@ export async function GET(request: NextRequest) {
       subtotal: parseFloat(inv.subtotal) || 0,
       vatAmount: parseFloat(inv.vatAmount) || 0,
       discountAmount: parseFloat(inv.discountAmount) || 0,
+      paidAmount: parseFloat(inv.paidAmount) || 0,
+      refundedAmount: parseFloat(inv.refundedAmount) || 0,
       items: itemsMap[Number(inv.id)] || [],
+      customer: {
+        id: inv.customerId ? Number(inv.customerId) : null,
+        code: inv.customerCode || null,
+        name: inv.customerName || null,
+      },
+      quotation: {
+        id: Number(inv.quotationId),
+        quotationNumber: inv.quotationNumber || null,
+        tourName: inv.tourName || null,
+      },
     }));
     
     return NextResponse.json({
@@ -303,8 +330,18 @@ export async function POST(request: NextRequest) {
       [invoiceId]
     );
     
+    // Serialize response to convert BigInt to Number
+    const serializedInvoice = {
+      ...invoices[0],
+      id: Number(invoices[0].id),
+      quotationId: Number(invoices[0].quotationId),
+      grandTotal: parseFloat(invoices[0].grandTotal) || 0,
+      subtotal: parseFloat(invoices[0].subtotal) || 0,
+      vatAmount: parseFloat(invoices[0].vatAmount) || 0,
+    };
+    
     return NextResponse.json({
-      invoice: invoices[0],
+      invoice: serializedInvoice,
       items: invoiceItems,
     }, { status: 201 });
     

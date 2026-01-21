@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, AlertCircle, CheckCircle } from 'lucide-react';
+import { X, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { useCurrentUser } from '@/contexts/AuthContext';
 
 interface InvoiceModalProps {
@@ -195,7 +195,15 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
 
       if (response.ok) {
         const data = await response.json();
-        onSuccess(data.invoice.id);
+        console.log('Invoice creation response:', data);
+        const invoiceId = data.invoice?.id || data.id;
+        console.log('Invoice ID:', invoiceId);
+        if (invoiceId) {
+          onSuccess(invoiceId);
+        } else {
+          console.error('No invoice ID in response:', data);
+          setError('สร้างใบแจ้งหนี้สำเร็จแต่ไม่สามารถดึง ID ได้');
+        }
       } else {
         const data = await response.json();
         setError(data.error || 'เกิดข้อผิดพลาดในการสร้างใบแจ้งหนี้');
@@ -229,6 +237,17 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
 
         {/* Content */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Info Alert */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-blue-900 mb-1">💡 คำแนะนำ</h3>
+              <p className="text-sm text-blue-700">
+                คุณสามารถแก้ไขรายการและราคาในใบแจ้งหนี้ได้หลังจากออกแล้ว เนื่องจากบางครั้งใบเสนอราคาหนึ่งอาจต้องแบ่งออกเป็นหลายใบแจ้งหนี้
+              </p>
+            </div>
+          </div>
+
           {/* Quotation Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="font-medium text-blue-900 mb-2">ใบเสนอราคา</h3>

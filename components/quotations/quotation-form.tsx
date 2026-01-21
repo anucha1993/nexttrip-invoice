@@ -917,9 +917,9 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
         // Redirect after showing success message
         setTimeout(() => {
           if (mode === 'create') {
-            router.push(`/quotations/${result.id}`);
+            router.push(`/quotations/${result.id}/dashboard`);
           } else {
-            router.push(`/quotations/${quotationId}/edit`);
+            router.push(`/quotations/${quotationId}/dashboard`);
           }
         }, 1500);
       } else {
