@@ -285,6 +285,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
         invoiceDate,
         dueDate,
         pax,
+        status,
         items: items.map((item, index) => ({
           ...item,
           sortOrder: index,
