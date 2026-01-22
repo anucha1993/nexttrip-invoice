@@ -112,6 +112,20 @@ export async function GET(
     // ยอดคงเหลือ = ยอด grandTotal - ชำระแล้ว + คืนเงิน
     const balanceAmount = Math.round((parseFloat(quotation.grandTotal || 0) - totalPaid + totalRefunded) * 100) / 100;
 
+    // คำนวณ paymentStatus ที่ถูกต้องจาก totalPaid
+    const grandTotal = parseFloat(quotation.grandTotal) || 0;
+    let calculatedPaymentStatus = quotation.paymentStatus || 'UNPAID';
+    if (grandTotal > 0) {
+      const netPaid = totalPaid - totalRefunded;
+      if (netPaid >= grandTotal) {
+        calculatedPaymentStatus = 'PAID';
+      } else if (netPaid > 0) {
+        calculatedPaymentStatus = 'PARTIAL';
+      } else {
+        calculatedPaymentStatus = 'UNPAID';
+      }
+    }
+
     const result = {
       ...quotation,
       saleName,
@@ -121,6 +135,7 @@ export async function GET(
       totalPaid,
       totalRefunded,
       balanceAmount,
+      paymentStatus: calculatedPaymentStatus,
     };
     console.log('📤 API Response - noCost:', result.noCost, 'hasWithholdingTax:', result.hasWithholdingTax);
 

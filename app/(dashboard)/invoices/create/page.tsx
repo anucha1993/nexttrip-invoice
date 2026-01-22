@@ -62,6 +62,9 @@ export default function CreateInvoicePage() {
   const [subtotal, setSubtotal] = useState(0);
   const [vatAmount, setVatAmount] = useState(0);
   const [grandTotal, setGrandTotal] = useState(0);
+  const [previousInvoiced, setPreviousInvoiced] = useState(0);
+  const [priceAdjusted, setPriceAdjusted] = useState(false);
+  const [adjustmentInfo, setAdjustmentInfo] = useState({ originalTotal: 0, adjustedTotal: 0 });
 
   useEffect(() => {
     fetchCustomers();
@@ -86,7 +89,7 @@ export default function CreateInvoicePage() {
 
   useEffect(() => {
     calculateTotals();
-  }, [items]);
+  }, [items, previousInvoiced]);
 
   const fetchCustomers = async () => {
     try {
@@ -152,14 +155,32 @@ export default function CreateInvoicePage() {
       const response = await fetch(`/api/quotations/${selectedQuotation.id}`);
       if (response.ok) {
         const data = await response.json();
+        
+        // คำนวณยอดที่ออกใบแจ้งหนี้ไปแล้ว
+        const totalInvoiced = selectedQuotation.totalInvoiced || 0;
+        
+        // Reset state
+        setPriceAdjusted(false);
+        setPreviousInvoiced(totalInvoiced);
+        
         // Map quotation items to invoice items
-        const invoiceItems = data.items.map((item: any) => ({
+        const invoiceItems: InvoiceItem[] = data.items.map((item: any) => ({
           productId: item.productId,
           description: item.productName || item.description,
           quantity: item.quantity,
           unitPrice: parseFloat(item.unitPrice),
           amount: parseFloat(item.amount),
         }));
+        
+        // ถ้ามีใบแจ้งหนี้เดิมแล้ว ให้แสดงข้อมูล
+        if (totalInvoiced > 0) {
+          setPriceAdjusted(true);
+          setAdjustmentInfo({ 
+            originalTotal: selectedQuotation.grandTotal, 
+            adjustedTotal: selectedQuotation.grandTotal - totalInvoiced 
+          });
+        }
+        
         setItems(invoiceItems);
       }
     } catch (error) {
@@ -172,7 +193,8 @@ export default function CreateInvoicePage() {
     const vat = 0; // No VAT for now
     setSubtotal(sub);
     setVatAmount(vat);
-    setGrandTotal(sub + vat);
+    // หักยอดใบแจ้งหนี้เดิมออก
+    setGrandTotal(sub + vat - previousInvoiced);
   };
 
   const filteredCustomers = customers.filter(c => 
@@ -280,6 +302,21 @@ export default function CreateInvoicePage() {
           </div>
         </div>
       </div>
+
+      {/* Price Adjustment Warning */}
+      {priceAdjusted && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+          <span className="text-xl">📋</span>
+          <div>
+            <h3 className="font-semibold text-amber-900 mb-1">มีใบแจ้งหนี้เดิมแล้ว</h3>
+            <p className="text-sm text-amber-700">
+              ใบเสนอราคานี้มียอดรวม {adjustmentInfo.originalTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿ 
+              ออกใบแจ้งหนี้ไปแล้ว {(adjustmentInfo.originalTotal - adjustmentInfo.adjustedTotal).toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿ 
+              คงเหลือ {adjustmentInfo.adjustedTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Info Alert */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
@@ -472,9 +509,15 @@ export default function CreateInvoicePage() {
                   {/* Totals */}
                   <div className="mt-4 pt-4 border-t space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">ยอดรวม:</span>
+                      <span className="text-gray-600">ยอดรวมรายการ:</span>
                       <span className="font-medium">฿{subtotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
                     </div>
+                    {previousInvoiced > 0 && (
+                      <div className="flex justify-between text-sm text-red-600">
+                        <span>หัก: ออกใบแจ้งหนี้แล้ว</span>
+                        <span className="font-medium">-฿{previousInvoiced.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
                     {vatAmount > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">ภาษีมูลค่าเพิ่ม 7%:</span>

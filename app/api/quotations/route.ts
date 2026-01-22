@@ -87,6 +87,20 @@ export async function GET(request: NextRequest) {
             AND i.status != 'CANCELLED' 
             AND i.status != 'VOIDED'
         ), 0) as totalInvoiced,
+        COALESCE((
+          SELECT SUM(i.paidAmount) 
+          FROM invoices i 
+          WHERE i.quotationId = q.id 
+            AND i.status != 'CANCELLED' 
+            AND i.status != 'VOIDED'
+        ), 0) as totalPaid,
+        COALESCE((
+          SELECT SUM(i.refundedAmount) 
+          FROM invoices i 
+          WHERE i.quotationId = q.id 
+            AND i.status != 'CANCELLED' 
+            AND i.status != 'VOIDED'
+        ), 0) as totalRefunded,
         (q.grandTotal - COALESCE((
           SELECT SUM(i.grandTotal) 
           FROM invoices i 
@@ -107,8 +121,35 @@ export async function GET(request: NextRequest) {
 
     console.log('📊 Query results:', { totalRows: rows.length, total, page, limit });
 
+    // คำนวณ paymentStatus ที่ถูกต้องจาก totalPaid - totalRefunded
+    const processedRows = rows.map((row: any) => {
+      const grandTotal = parseFloat(row.grandTotal) || 0;
+      const totalPaid = parseFloat(row.totalPaid) || 0;
+      const totalRefunded = parseFloat(row.totalRefunded) || 0;
+      const netPaid = totalPaid - totalRefunded;
+      
+      let calculatedPaymentStatus = row.paymentStatus || 'UNPAID';
+      if (grandTotal > 0) {
+        if (netPaid >= grandTotal) {
+          calculatedPaymentStatus = 'PAID';
+        } else if (netPaid > 0) {
+          calculatedPaymentStatus = 'PARTIAL';
+        } else {
+          calculatedPaymentStatus = 'UNPAID';
+        }
+      }
+      
+      return {
+        ...row,
+        totalPaid: totalPaid,
+        totalRefunded: totalRefunded,
+        netPaid: netPaid,
+        paymentStatus: calculatedPaymentStatus,
+      };
+    });
+
     return NextResponse.json({
-      data: rows,
+      data: processedRows,
       pagination: {
         page,
         limit,

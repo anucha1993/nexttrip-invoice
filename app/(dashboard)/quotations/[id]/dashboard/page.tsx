@@ -192,7 +192,7 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors border-b-2 shrink-0 ${
+                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors  shrink-0 ${
                   activeTab === tab.id
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
@@ -1682,10 +1682,21 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
   const [banks, setBanks] = useState<any[]>([]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
 
+  // Helper function to get local datetime-local format
+  const getLocalDateTimeString = (date?: Date | string): string => {
+    const d = date ? new Date(date) : new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   // Form states
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('TRANSFER');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(getLocalDateTimeString());
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [refundReason, setRefundReason] = useState('');
@@ -2023,7 +2034,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
     const amount = Math.round(parseFloat(tx.amount || 0) * 100) / 100;
     setPaymentAmount(amount.toFixed(2));
     setPaymentMethod(tx.paymentMethod || 'TRANSFER');
-    setPaymentDate(tx.paymentDate?.split('T')[0] || new Date().toISOString().split('T')[0]);
+    setPaymentDate(tx.paymentDate ? getLocalDateTimeString(tx.paymentDate) : getLocalDateTimeString());
     setReferenceNumber(tx.referenceNumber || '');
     setNotes(tx.notes || '');
     setSelectedBankAccountId(tx.bankAccountId?.toString() || '');
@@ -2047,7 +2058,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
   const resetForm = () => {
     setPaymentAmount('');
     setPaymentMethod('TRANSFER');
-    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentDate(getLocalDateTimeString());
     setReferenceNumber('');
     setNotes('');
     setRefundReason('');
@@ -2510,9 +2521,9 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">วันที่ชำระ</label>
+                <label className="block text-sm font-medium mb-1">วันที่และเวลาชำระ</label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   className="w-full border rounded-lg px-3 py-2"
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
@@ -2637,9 +2648,9 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">วันที่คืนเงิน</label>
+                <label className="block text-sm font-medium mb-1">วันที่และเวลาคืนเงิน</label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   className="w-full border rounded-lg px-3 py-2"
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
