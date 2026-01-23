@@ -212,11 +212,11 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
         {activeTab === 'quotation' && <QuotationTab quotation={quotation} quotationId={resolvedParams.id} />}
         {activeTab === 'invoice' && <InvoiceTab quotation={quotation} onCreateInvoice={() => setShowInvoiceModal(true)} refreshKey={invoiceRefreshKey} />}
         {activeTab === 'customer-payment' && <CustomerPaymentTab quotation={quotation} onPaymentChange={handlePaymentChange} refreshKey={paymentRefreshKey} />}
-        {activeTab === 'wholesale-payment' && <WholesalePaymentTab />}
-        {activeTab === 'tax' && <TaxTab />}
+        {activeTab === 'wholesale-payment' && <WholesalePaymentTab quotation={quotation} />}
+        {activeTab === 'tax' && <TaxTab quotation={quotation} />}
         {activeTab === 'cost' && <CostTab />}
         {activeTab === 'documents' && <DocumentsTab />}
-        {activeTab === 'wholesale-cost' && <WholesaleCostTab />}
+        {activeTab === 'wholesale-cost' && <WholesaleCostTab quotation={quotation} />}
         {activeTab === 'profit' && <ProfitTab />}
         {activeTab === 'checklist' && <ChecklistTab />}
       </div>
@@ -2335,7 +2335,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                           {tx.status === 'PENDING' && (
                             <button
                               onClick={() => handleConfirmTransaction(tx.id, tx.transactionNumber)}
-                              className="p-1 text-green-600 hover:bg-green-50 rounded"
+                              className="p-1 text-green-600 hover:bg-green-50 rounded cursor-pointer"
                               title="ยืนยัน"
                             >
                               <CheckCircle className="w-4 h-4" />
@@ -2347,7 +2347,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                               {tx.status === 'CONFIRMED' && (
                                 <button
                                   onClick={() => alert('ฟีเจอร์พิมพ์เอกสารกำลังพัฒนา')}
-                                  className="p-1 text-purple-600 hover:bg-purple-50 rounded"
+                                  className="p-1 text-purple-600 hover:bg-purple-50 rounded cursor-pointer"
                                   title="พิมพ์"
                                 >
                                   <Printer className="w-4 h-4" />
@@ -2355,14 +2355,14 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                               )}
                               <button
                                 onClick={() => handleEditTransaction(tx)}
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
                                 title="แก้ไข"
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleCancelTransaction(tx.id, tx.transactionNumber)}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
                                 title="ยกเลิก"
                               >
                                 <XCircle className="w-4 h-4" />
@@ -2394,7 +2394,10 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                   className="w-full border rounded-lg px-3 py-2"
                   value={selectedInvoice?.id || ''}
                   onChange={(e) => {
-                    const inv = payableInvoices.find(i => i.id === parseInt(e.target.value));
+                    const allInvoices = editingTransactionId && selectedInvoice && !payableInvoices.find(i => i.id === selectedInvoice.id)
+                      ? [...payableInvoices, selectedInvoice]
+                      : payableInvoices;
+                    const inv = allInvoices.find(i => i.id === parseInt(e.target.value));
                     setSelectedInvoice(inv);
                     if (inv) {
                       // คงเหลือ = grandTotal - paidAmount + refundedAmount
@@ -2404,15 +2407,21 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                   }}
                 >
                   <option value="">-- เลือก --</option>
-                  {payableInvoices.map(inv => {
-                    // คงเหลือ = grandTotal - paidAmount + refundedAmount
-                    const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
-                    return (
-                      <option key={inv.id} value={inv.id}>
-                        {inv.invoiceNumber} - คงเหลือ {balance.toLocaleString()} ฿
-                      </option>
-                    );
-                  })}
+                  {(() => {
+                    // เมื่อแก้ไข ให้รวม invoice ที่ถูกเลือกไว้เข้าไปด้วย
+                    const displayInvoices = editingTransactionId && selectedInvoice && !payableInvoices.find(i => i.id === selectedInvoice.id)
+                      ? [...payableInvoices, selectedInvoice]
+                      : payableInvoices;
+                    return displayInvoices.map(inv => {
+                      // คงเหลือ = grandTotal - paidAmount + refundedAmount
+                      const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
+                      return (
+                        <option key={inv.id} value={inv.id}>
+                          {inv.invoiceNumber} - คงเหลือ {balance.toLocaleString()} ฿
+                        </option>
+                      );
+                    });
+                  })()}
                 </select>
               </div>
               <div>
@@ -2513,6 +2522,16 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                         <span className="text-red-600">📄</span>
                         <span className="text-sm">{slipFile.name}</span>
                       </div>
+                    ) : slipPreview.toLowerCase().endsWith('.pdf') ? (
+                      <a 
+                        href={slipPreview} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 bg-gray-100 rounded border text-blue-600 hover:text-blue-800"
+                      >
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">ดูไฟล์ PDF ที่แนบไว้</span>
+                      </a>
                     ) : (
                       <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
                     )}
@@ -2578,19 +2597,28 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                   className="w-full border rounded-lg px-3 py-2"
                   value={selectedInvoice?.id || ''}
                   onChange={(e) => {
-                    const inv = refundableInvoices.find(i => i.id === parseInt(e.target.value));
+                    const allInvoices = editingTransactionId && selectedInvoice && !refundableInvoices.find(i => i.id === selectedInvoice.id)
+                      ? [...refundableInvoices, selectedInvoice]
+                      : refundableInvoices;
+                    const inv = allInvoices.find(i => i.id === parseInt(e.target.value));
                     setSelectedInvoice(inv);
                   }}
                 >
                   <option value="">-- เลือก --</option>
-                  {refundableInvoices.map(inv => {
-                    const refundable = Math.round((parseFloat(inv.paidAmount || 0) - parseFloat(inv.refundedAmount || 0)) * 100) / 100;
-                    return (
-                      <option key={inv.id} value={inv.id}>
-                        {inv.invoiceNumber} - ชำระแล้ว {refundable.toLocaleString()} ฿
-                      </option>
-                    );
-                  })}
+                  {(() => {
+                    // เมื่อแก้ไข ให้รวม invoice ที่ถูกเลือกไว้เข้าไปด้วย
+                    const displayInvoices = editingTransactionId && selectedInvoice && !refundableInvoices.find(i => i.id === selectedInvoice.id)
+                      ? [...refundableInvoices, selectedInvoice]
+                      : refundableInvoices;
+                    return displayInvoices.map(inv => {
+                      const refundable = Math.round((parseFloat(inv.paidAmount || 0) - parseFloat(inv.refundedAmount || 0)) * 100) / 100;
+                      return (
+                        <option key={inv.id} value={inv.id}>
+                          {inv.invoiceNumber} - ชำระแล้ว {refundable.toLocaleString()} ฿
+                        </option>
+                      );
+                    });
+                  })()}
                 </select>
               </div>
               <div>
@@ -2641,6 +2669,16 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                         <span className="text-red-600">📄</span>
                         <span className="text-sm">{slipFile.name}</span>
                       </div>
+                    ) : slipPreview.toLowerCase().endsWith('.pdf') ? (
+                      <a 
+                        href={slipPreview} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 bg-gray-100 rounded border text-blue-600 hover:text-blue-800"
+                      >
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">ดูไฟล์ PDF</span>
+                      </a>
                     ) : (
                       <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
                     )}
@@ -2906,7 +2944,504 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
   );
 }
 
-function WholesalePaymentTab() {
+function WholesalePaymentTab({ quotation }: { quotation: any }) {
+  const { userId, userName } = useCurrentUser();
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+
+  // Banks and accounts
+  const [banks, setBanks] = useState<any[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [wholesales, setWholesales] = useState<any[]>([]);
+
+  // Wholesale costs
+  const [wholesaleCosts, setWholesaleCosts] = useState<any[]>([]);
+
+  // Helper function to get local datetime-local format
+  const getLocalDateTimeString = (date?: Date | string): string => {
+    const d = date ? new Date(date) : new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  // Form states
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('TRANSFER');
+  const [transactionDate, setTransactionDate] = useState(getLocalDateTimeString());
+  const [paymentDate, setPaymentDate] = useState(getLocalDateTimeString());
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const [notes, setNotes] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  
+  // Wholesale
+  const [selectedWholesaleId, setSelectedWholesaleId] = useState('');
+  const [wholesaleName, setWholesaleName] = useState('');
+  
+  // Transfer specific - from our account
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState('');
+  // Transfer specific - to wholesale account
+  const [toBankName, setToBankName] = useState('');
+  const [toBankAccountNo, setToBankAccountNo] = useState('');
+  const [toBankAccountName, setToBankAccountName] = useState('');
+  
+  // Cheque specific
+  const [chequeNumber, setChequeNumber] = useState('');
+  const [chequeDate, setChequeDate] = useState('');
+  const [chequeBankId, setChequeBankId] = useState('');
+
+  // Slip
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [slipPreview, setSlipPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchData();
+    fetchBanksAndAccounts();
+    fetchWholesales();
+    fetchWholesaleCosts();
+  }, [quotation.id]);
+
+  const fetchBanksAndAccounts = async () => {
+    try {
+      const [banksRes, accountsRes] = await Promise.all([
+        fetch('/api/banks'),
+        fetch('/api/bank-accounts'),
+      ]);
+      
+      if (banksRes.ok) {
+        const data = await banksRes.json();
+        setBanks(data.banks || []);
+      }
+      
+      if (accountsRes.ok) {
+        const data = await accountsRes.json();
+        setBankAccounts(data.bankAccounts || []);
+      }
+    } catch (error) {
+      console.error('Error fetching banks:', error);
+    }
+  };
+
+  const fetchWholesales = async () => {
+    try {
+      const res = await fetch('/api/wholesales');
+      if (res.ok) {
+        const data = await res.json();
+        setWholesales(data.wholesales || data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching wholesales:', error);
+    }
+  };
+
+  const fetchWholesaleCosts = async () => {
+    try {
+      const response = await fetch(`/api/wholesale-costs?quotationId=${quotation.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setWholesaleCosts(data.costs || []);
+      }
+    } catch (error) {
+      console.error('Error fetching wholesale costs:', error);
+    }
+  };
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/wholesale-transactions?quotationId=${quotation.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setTransactions(data.transactions || []);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate totals
+  const totalPaid = transactions
+    .filter(t => t.transactionType === 'PAYMENT' && t.status === 'CONFIRMED')
+    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+  
+  const totalRefunded = transactions
+    .filter(t => t.transactionType === 'REFUND' && t.status === 'CONFIRMED')
+    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+  
+  const netPaid = totalPaid - totalRefunded;
+
+  // Calculate total wholesale cost and remaining
+  const totalWholesaleCost = wholesaleCosts.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+  const remainingToPay = Math.max(0, totalWholesaleCost - netPaid);
+  
+  // Check if payment can be made
+  const canMakePayment = totalWholesaleCost > 0 && remainingToPay > 0;
+  const paymentBlockedReason = totalWholesaleCost === 0 
+    ? 'ยังไม่มีต้นทุน Wholesale กรุณาเพิ่มต้นทุนก่อนบันทึกจ่ายเงิน' 
+    : remainingToPay <= 0 
+      ? 'ชำระยอดครบหมดแล้ว ไม่สามารถบันทึกจ่ายเงินเพิ่มได้' 
+      : '';
+
+  const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSlipFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSlipPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handlePayment = async () => {
+    if (!paymentAmount) {
+      alert('กรุณาระบุยอดเงิน');
+      return;
+    }
+
+    const paymentAmountNum = parseFloat(paymentAmount);
+    
+    // Check if not editing (new payment) - validate against remaining
+    const isEditing = editingTransactionId !== null;
+    if (!isEditing) {
+      if (totalWholesaleCost === 0) {
+        alert('ยังไม่มีต้นทุน Wholesale กรุณาเพิ่มต้นทุนก่อนบันทึกจ่ายเงิน');
+        return;
+      }
+      
+      if (paymentAmountNum > remainingToPay) {
+        alert(`ยอดที่จ่ายเกินยอดค้างจ่าย\n\nต้นทุน Wholesale: ${totalWholesaleCost.toLocaleString()} ฿\nจ่ายแล้ว: ${netPaid.toLocaleString()} ฿\nค้างจ่าย: ${remainingToPay.toLocaleString()} ฿\n\nกรุณาระบุยอดไม่เกิน ${remainingToPay.toLocaleString()} ฿`);
+        return;
+      }
+    }
+
+    try {
+      setSubmitting(true);
+      
+      // Validate based on payment method (optional for wholesale - we're paying out, not receiving)
+      if (paymentMethod === 'CHEQUE' && (!chequeBankId || !chequeNumber || !chequeDate)) {
+        alert('กรุณากรอกข้อมูลเช็คให้ครบถ้วน');
+        setSubmitting(false);
+        return;
+      }
+      
+      // Upload slip if exists
+      let uploadedSlipUrl = null;
+      if (slipFile) {
+        const formData = new FormData();
+        formData.append('file', slipFile);
+        formData.append('folder', 'slips');
+        
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          uploadedSlipUrl = uploadData.url;
+        } else {
+          const uploadError = await uploadRes.json();
+          alert(uploadError.error || 'ไม่สามารถอัพโหลดสลิปได้');
+          setSubmitting(false);
+          return;
+        }
+      }
+      
+      const isEditing = editingTransactionId !== null;
+      const url = isEditing 
+        ? `/api/wholesale-transactions/${editingTransactionId}` 
+        : '/api/wholesale-transactions';
+      
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionType: 'PAYMENT',
+          quotationId: quotation.id,
+          wholesaleId: quotation.wholesaleId || null,
+          wholesaleName: quotation.wholesaleName || null,
+          amount: parseFloat(parseFloat(paymentAmount).toFixed(2)),
+          paymentMethod: 'TRANSFER',
+          transactionDate,
+          paymentDate,
+          referenceNumber,
+          notes,
+          slipUrl: uploadedSlipUrl,
+          // Auto-confirm if slip is attached
+          autoConfirm: !isEditing && !!uploadedSlipUrl,
+          confirmOnSlip: isEditing && !!uploadedSlipUrl,
+          createdById: userId,
+          createdByName: userName,
+          updatedById: userId,
+          updatedByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || (isEditing ? 'แก้ไขเรียบร้อย' : 'บันทึกเรียบร้อย'));
+        setShowPaymentModal(false);
+        resetForm();
+        fetchData();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึก');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!paymentAmount || !refundReason) {
+      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      // Upload slip if exists
+      let uploadedSlipUrl = null;
+      if (slipFile) {
+        const formData = new FormData();
+        formData.append('file', slipFile);
+        formData.append('folder', 'slips');
+        
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          uploadedSlipUrl = uploadData.url;
+        } else {
+          const uploadError = await uploadRes.json();
+          alert(uploadError.error || 'ไม่สามารถอัพโหลดหลักฐานได้');
+          setSubmitting(false);
+          return;
+        }
+      }
+      
+      const isEditing = editingTransactionId !== null;
+      const url = isEditing 
+        ? `/api/wholesale-transactions/${editingTransactionId}` 
+        : '/api/wholesale-transactions';
+      
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionType: 'REFUND',
+          quotationId: quotation.id,
+          wholesaleId: quotation.wholesaleId || null,
+          wholesaleName: quotation.wholesaleName || null,
+          amount: parseFloat(parseFloat(paymentAmount).toFixed(2)),
+          paymentMethod: 'TRANSFER',
+          transactionDate,
+          paymentDate,
+          referenceNumber,
+          refundReason,
+          notes,
+          slipUrl: uploadedSlipUrl,
+          autoConfirm: !isEditing && !!uploadedSlipUrl,
+          confirmOnSlip: isEditing && !!uploadedSlipUrl,
+          createdById: userId,
+          createdByName: userName,
+          updatedById: userId,
+          updatedByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || (isEditing ? 'แก้ไขเรียบร้อย' : 'บันทึกเรียบร้อย'));
+        setShowRefundModal(false);
+        resetForm();
+        fetchData();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึก');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Confirm transaction
+  const handleConfirmTransaction = async (transactionId: number, transactionNumber: string) => {
+    const confirmed = window.confirm(`ต้องการยืนยันธุรกรรม "${transactionNumber}" ใช่หรือไม่?`);
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/wholesale-transactions/${transactionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'confirm',
+          confirmedById: userId,
+          confirmedByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || 'ยืนยันเรียบร้อย');
+        fetchData();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการยืนยัน');
+    }
+  };
+
+  // Cancel transaction
+  const handleCancelTransaction = async (transactionId: number, transactionNumber: string) => {
+    const reason = window.prompt(`กรุณาระบุเหตุผลในการยกเลิกธุรกรรม "${transactionNumber}":`);
+    if (!reason) return;
+
+    try {
+      const response = await fetch(`/api/wholesale-transactions/${transactionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel',
+          cancelReason: reason,
+          cancelledById: userId,
+          cancelledByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || 'ยกเลิกเรียบร้อย');
+        fetchData();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการยกเลิก');
+    }
+  };
+
+  // Edit transaction
+  const handleEditTransaction = (tx: any) => {
+    setEditingTransactionId(tx.id);
+    
+    // Pre-fill form with transaction data
+    const amount = Math.round(parseFloat(tx.amount || 0) * 100) / 100;
+    setPaymentAmount(amount.toFixed(2));
+    setPaymentMethod(tx.paymentMethod || 'TRANSFER');
+    setTransactionDate(tx.transactionDate ? getLocalDateTimeString(tx.transactionDate) : getLocalDateTimeString());
+    setPaymentDate(tx.paymentDate ? getLocalDateTimeString(tx.paymentDate) : getLocalDateTimeString());
+    setReferenceNumber(tx.referenceNumber || '');
+    setNotes(tx.notes || '');
+    setSelectedWholesaleId(tx.wholesaleId?.toString() || '');
+    setWholesaleName(tx.wholesaleName || '');
+    setSelectedBankAccountId(tx.bankAccountId?.toString() || '');
+    setToBankName(tx.toBankName || '');
+    setToBankAccountNo(tx.toBankAccountNo || '');
+    setToBankAccountName(tx.toBankAccountName || '');
+    setChequeNumber(tx.chequeNumber || '');
+    setChequeDate(tx.chequeDate?.split('T')[0] || '');
+    setChequeBankId(tx.chequeBankId?.toString() || '');
+    
+    // Set slip preview if exists
+    if (tx.slipUrl) {
+      setSlipPreview(tx.slipUrl);
+    }
+    
+    if (tx.transactionType === 'PAYMENT') {
+      setShowPaymentModal(true);
+    } else {
+      setRefundReason(tx.refundReason || '');
+      setShowRefundModal(true);
+    }
+  };
+
+  const resetForm = () => {
+    setPaymentAmount('');
+    setPaymentMethod('TRANSFER');
+    setTransactionDate(getLocalDateTimeString());
+    setPaymentDate(getLocalDateTimeString());
+    setReferenceNumber('');
+    setNotes('');
+    setRefundReason('');
+    setSelectedWholesaleId('');
+    setWholesaleName('');
+    setSelectedBankAccountId('');
+    setToBankName('');
+    setToBankAccountNo('');
+    setToBankAccountName('');
+    setChequeNumber('');
+    setChequeDate('');
+    setChequeBankId('');
+    setSlipFile(null);
+    setSlipPreview(null);
+    setEditingTransactionId(null);
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('th-TH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleString('th-TH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      'PENDING': 'bg-yellow-100 text-yellow-700',
+      'CONFIRMED': 'bg-green-100 text-green-700',
+      'CANCELLED': 'bg-red-100 text-red-700',
+    };
+    const labels: Record<string, string> = {
+      'PENDING': 'รอยืนยัน',
+      'CONFIRMED': 'ยืนยันแล้ว',
+      'CANCELLED': 'ยกเลิก',
+    };
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || ''}`}>
+        {labels[status] || status}
+      </span>
+    );
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -2915,24 +3450,607 @@ function WholesalePaymentTab() {
             <ShoppingCart className="w-5 h-5" />
             ระบบจัดการการชำระเงินให้ Wholesale
           </h3>
-          <Button size="sm" className="text-xs sm:text-sm">
-            <Plus className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">บันทึกการชำระ</span>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              size="sm" 
+              className={`text-xs sm:text-sm ${canMakePayment ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}
+              onClick={() => {
+                if (!canMakePayment) {
+                  alert(paymentBlockedReason);
+                  return;
+                }
+                setShowPaymentModal(true);
+              }}
+              disabled={!canMakePayment}
+              title={paymentBlockedReason || 'บันทึกจ่ายเงิน'}
+            >
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">บันทึกจ่ายเงิน</span>
+              <span className="sm:hidden">จ่ายเงิน</span>
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="text-xs sm:text-sm text-orange-600 border-orange-300 hover:bg-orange-50"
+              onClick={() => setShowRefundModal(true)}
+            >
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">บันทึกรับเงินคืน</span>
+              <span className="sm:hidden">รับคืน</span>
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-center py-8 sm:py-12 text-gray-500 bg-gray-50 rounded-lg">
-          <ShoppingCart className="w-12 sm:w-16 h-12 sm:h-16 mx-auto mb-4 text-gray-300" />
-          <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการชำระเงินให้ Wholesale</p>
-          <p className="text-xs sm:text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
+        <div className="space-y-4">
+          {/* Warning message if payment is blocked */}
+          {paymentBlockedReason && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700 flex items-center gap-2">
+              <span className="text-amber-500">⚠️</span>
+              {paymentBlockedReason}
+            </div>
+          )}
+          
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
+            <div className="p-3 sm:p-4 bg-purple-50 rounded-lg border border-purple-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ต้นทุน Wholesale</p>
+              <p className="text-lg sm:text-2xl font-bold text-purple-600">{totalWholesaleCost.toLocaleString()} ฿</p>
+            </div>
+            <div className="p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">จ่ายแล้ว</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600">{totalPaid.toLocaleString()} ฿</p>
+            </div>
+            <div className="p-3 sm:p-4 bg-orange-50 rounded-lg border border-orange-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">รับคืน</p>
+              <p className="text-lg sm:text-2xl font-bold text-orange-600">{totalRefunded.toLocaleString()} ฿</p>
+            </div>
+            <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">สุทธิจ่าย</p>
+              <p className="text-lg sm:text-2xl font-bold text-blue-600">{netPaid.toLocaleString()} ฿</p>
+            </div>
+            <div className={`p-3 sm:p-4 rounded-lg border ${remainingToPay > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ค้างจ่าย</p>
+              <p className={`text-lg sm:text-2xl font-bold ${remainingToPay > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                {remainingToPay.toLocaleString()} ฿
+              </p>
+            </div>
+          </div>
+
+          {/* Transactions Table */}
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
+          ) : transactions.length === 0 ? (
+            <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <ShoppingCart className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการชำระเงินให้ Wholesale</p>
+              <p className="text-xs sm:text-sm mt-1">คลิกปุ่มบันทึกจ่ายเงินเพื่อเริ่มต้น</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-3 px-4 font-medium">เลขที่</th>
+                    <th className="text-left py-3 px-4 font-medium">ประเภท</th>
+                    <th className="text-left py-3 px-4 font-medium">Wholesale</th>
+                    <th className="text-left py-3 px-4 font-medium">วันที่ทำรายการ</th>
+                    <th className="text-left py-3 px-4 font-medium">วันที่ชำระ</th>
+                    <th className="text-right py-3 px-4 font-medium">ยอดเงิน</th>
+                    <th className="text-left py-3 px-4 font-medium">วิธีชำระ</th>
+                    <th className="text-center py-3 px-4 font-medium">สถานะ</th>
+                    <th className="text-left py-3 px-4 font-medium">ผู้บันทึก</th>
+                    <th className="text-center py-3 px-4 font-medium">หลักฐาน</th>
+                    <th className="text-center py-3 px-4 font-medium">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="border-t hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <span className="font-medium text-blue-600">{tx.transactionNumber}</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          tx.transactionType === 'PAYMENT' 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {tx.transactionType === 'PAYMENT' ? 'จ่ายเงิน' : 'รับคืน'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">{tx.wholesaleName || '-'}</td>
+                      <td className="py-3 px-4">{formatDateTime(tx.transactionDate)}</td>
+                      <td className="py-3 px-4">{formatDateTime(tx.paymentDate)}</td>
+                      <td className={`py-3 px-4 text-right font-medium ${
+                        tx.transactionType === 'PAYMENT' ? 'text-red-600' : 'text-green-600'
+                      }`}>
+                        {tx.transactionType === 'PAYMENT' ? '-' : '+'}
+                        {parseFloat(tx.amount).toLocaleString()} ฿
+                      </td>
+                      <td className="py-3 px-4">
+                        {(() => {
+                          const methodLabels: Record<string, string> = {
+                            'CASH': 'เงินสด',
+                            'TRANSFER': 'โอนเงิน',
+                            'CHEQUE': 'เช็ค',
+                            'CREDIT_CARD': 'บัตรเครดิต',
+                          };
+                          return (
+                            <span className="text-xs text-gray-700">
+                              {methodLabels[tx.paymentMethod] || tx.paymentMethod}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="py-3 px-4 text-center">{getStatusBadge(tx.status)}</td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs text-gray-600">{tx.createdByName || '-'}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {tx.slipUrl ? (
+                          <a 
+                            href={tx.slipUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
+                          >
+                            <FileText className="w-3 h-3" />
+                            ไฟล์หลักฐาน
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1 justify-center">
+                          {tx.status === 'PENDING' && (
+                            <button
+                              onClick={() => handleConfirmTransaction(tx.id, tx.transactionNumber)}
+                              className="p-1 text-green-600 hover:bg-green-50 rounded cursor-pointer"
+                              title="ยืนยัน"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          {tx.status !== 'CANCELLED' && (
+                            <>
+                              <button
+                                onClick={() => handleEditTransaction(tx)}
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                                title="แก้ไข"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleCancelTransaction(tx.id, tx.transactionNumber)}
+                                className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                                title="ยกเลิก"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </CardContent>
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold">{editingTransactionId ? 'แก้ไขจ่ายเงิน' : 'บันทึกจ่ายเงินให้ Wholesale'}</h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Wholesale</label>
+                <div className="w-full border rounded-lg px-3 py-2 bg-gray-100 text-gray-700">
+                  {quotation.wholesaleName || 'ไม่ระบุ Wholesale'}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">ยอดเงิน *</label>
+                <input
+                  type="number" 
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+
+              {/* แนบสลิป/หลักฐาน */}
+              <div>
+                <label className="block text-sm font-medium mb-1">แนบหลักฐานการชำระ</label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  onChange={handleSlipChange}
+                />
+                {slipPreview && (
+                  <div className="mt-2">
+                    {slipFile?.type === 'application/pdf' ? (
+                      <div className="flex items-center gap-2 p-2 bg-gray-100 rounded border">
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">{slipFile.name}</span>
+                      </div>
+                    ) : slipPreview.toLowerCase().endsWith('.pdf') ? (
+                      <a 
+                        href={slipPreview} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 bg-gray-100 rounded border text-blue-600 hover:text-blue-800"
+                      >
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">ดูไฟล์ PDF</span>
+                      </a>
+                    ) : (
+                      <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">วันที่ทำรายการ</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={transactionDate}
+                    onChange={(e) => setTransactionDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">วันที่ชำระ</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">เลขอ้างอิง</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={referenceNumber}
+                  onChange={(e) => setReferenceNumber(e.target.value)}
+                  placeholder="เลขอ้างอิงอื่นๆ (ถ้ามี)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">หมายเหตุ</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setShowPaymentModal(false); resetForm(); }}>
+                ยกเลิก
+              </Button>
+              <Button onClick={handlePayment} disabled={submitting} className="bg-green-600 hover:bg-green-700">
+                {submitting ? 'กำลังบันทึก...' : (editingTransactionId ? 'บันทึกการแก้ไข' : 'บันทึกจ่ายเงิน')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Modal */}
+      {showRefundModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold text-orange-600">{editingTransactionId ? 'แก้ไขรับเงินคืน' : 'บันทึกรับเงินคืนจาก Wholesale'}</h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-700">
+                ⚠️ ใช้สำหรับกรณีโอนเงินให้ Wholesale เกิน หรือได้รับเงินคืน
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Wholesale</label>
+                <div className="w-full border rounded-lg px-3 py-2 bg-gray-100 text-gray-700">
+                  {quotation.wholesaleName || 'ไม่ระบุ Wholesale'}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">ยอดเงินคืน *</label>
+                <input
+                  type="number"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">เหตุผลในการรับเงินคืน *</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  rows={2}
+                  placeholder="ระบุเหตุผล เช่น โอนเกิน, ยกเลิกบริการ"
+                />
+              </div>
+              {/* แนบสลิป/หลักฐานคืนเงิน */}
+              <div>
+                <label className="block text-sm font-medium mb-1">แนบหลักฐาน</label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  onChange={handleSlipChange}
+                />
+                {slipPreview && (
+                  <div className="mt-2">
+                    {slipFile?.type === 'application/pdf' ? (
+                      <div className="flex items-center gap-2 p-2 bg-gray-100 rounded border">
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">{slipFile.name}</span>
+                      </div>
+                    ) : slipPreview.toLowerCase().endsWith('.pdf') ? (
+                      <a 
+                        href={slipPreview} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 bg-gray-100 rounded border text-blue-600 hover:text-blue-800"
+                      >
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">ดูไฟล์ PDF</span>
+                      </a>
+                    ) : (
+                      <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">วันที่ทำรายการ</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={transactionDate}
+                    onChange={(e) => setTransactionDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">วันที่รับเงิน</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setShowRefundModal(false); resetForm(); }}>
+                ยกเลิก
+              </Button>
+              <Button onClick={handleRefund} disabled={submitting} className="bg-orange-600 hover:bg-orange-700">
+                {submitting ? 'กำลังบันทึก...' : (editingTransactionId ? 'บันทึกการแก้ไข' : 'บันทึกรับเงินคืน')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
 
-function TaxTab() {
+function TaxTab({ quotation }: { quotation: any }) {
+  const { userId, userName } = useCurrentUser();
+  const [purchaseTaxes, setPurchaseTaxes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingTax, setEditingTax] = useState<any>(null);
+  const [uploading, setUploading] = useState(false);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    referenceNumber: '',
+    wholesaleId: '',
+    vendorName: '',
+    vendorTaxId: '',
+    serviceAmount: '',
+    hasWithholdingTax: false,
+    withholdingTaxRate: '3',
+    vatRate: '7',
+    taxDate: new Date().toISOString().split('T')[0],
+    notes: '',
+    slipUrl: ''
+  });
+
+  // Calculated values
+  const serviceAmountNum = parseFloat(formData.serviceAmount) || 0;
+  const withholdingTaxRate = parseFloat(formData.withholdingTaxRate) || 3;
+  const vatRate = parseFloat(formData.vatRate) || 7;
+  const withholdingTaxAmount = formData.hasWithholdingTax ? (serviceAmountNum * withholdingTaxRate / 100) : 0;
+  const vatAmount = serviceAmountNum * vatRate / 100;
+  const totalAmount = serviceAmountNum + vatAmount - withholdingTaxAmount;
+
+  // Check if withholding tax already issued (only 1 allowed per quotation)
+  const existingWithholdingTax = purchaseTaxes.find(pt => pt.hasWithholdingTax && pt.id !== editingTax?.id);
+  const canIssueWithholdingTax = !existingWithholdingTax;
+  
+  // Check if editing a record that already has withholding tax (cannot uncheck, must delete)
+  const isEditingWithholdingTaxRecord = editingTax?.hasWithholdingTax;
+
+  useEffect(() => {
+    fetchPurchaseTaxes();
+  }, [quotation.id]);
+
+  const fetchPurchaseTaxes = async () => {
+    try {
+      const response = await fetch(`/api/purchase-taxes?quotationId=${quotation.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setPurchaseTaxes(data);
+      }
+    } catch (error) {
+      console.error('Error fetching purchase taxes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      referenceNumber: '',
+      wholesaleId: quotation.wholesaleId?.toString() || '',
+      vendorName: quotation.wholesaleName || '',
+      vendorTaxId: quotation.wholesaleTaxId || '',
+      serviceAmount: '',
+      hasWithholdingTax: false,
+      withholdingTaxRate: '3',
+      vatRate: '7',
+      taxDate: new Date().toISOString().split('T')[0],
+      notes: '',
+      slipUrl: ''
+    });
+    setEditingTax(null);
+  };
+
+  const handleOpenModal = () => {
+    resetForm();
+    setShowModal(true);
+  };
+
+  const handleEditTax = (tax: any) => {
+    setFormData({
+      referenceNumber: tax.referenceNumber || '',
+      wholesaleId: tax.wholesaleId?.toString() || '',
+      vendorName: tax.vendorName || '',
+      vendorTaxId: tax.vendorTaxId || '',
+      serviceAmount: tax.serviceAmount?.toString() || '',
+      hasWithholdingTax: Boolean(tax.hasWithholdingTax),
+      withholdingTaxRate: String(parseInt(tax.withholdingTaxRate) || 3),
+      vatRate: String(parseInt(tax.vatRate) || 7),
+      taxDate: tax.taxDate ? new Date(tax.taxDate).toISOString().split('T')[0] : '',
+      notes: tax.notes || '',
+      slipUrl: tax.slipUrl || ''
+    });
+    setEditingTax(tax);
+    setShowModal(true);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('folder', 'purchase-taxes');
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: uploadFormData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFormData(prev => ({ ...prev, slipUrl: data.url }));
+      } else {
+        const uploadError = await response.json();
+        alert(uploadError.error || 'ไม่สามารถอัพโหลดไฟล์ได้');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('เกิดข้อผิดพลาดในการอัพโหลด');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.referenceNumber || !formData.serviceAmount) {
+      alert('กรุณากรอกเลขที่เอกสารและยอดค่าบริการ');
+      return;
+    }
+
+    try {
+      const url = editingTax 
+        ? `/api/purchase-taxes/${editingTax.id}` 
+        : '/api/purchase-taxes';
+      
+      const method = editingTax ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quotationId: quotation.id,
+          ...formData,
+          createdBy: userId,
+          updatedBy: userId
+        })
+      });
+
+      if (response.ok) {
+        fetchPurchaseTaxes();
+        setShowModal(false);
+        resetForm();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      alert('เกิดข้อผิดพลาด');
+    }
+  };
+
+  const handleDeleteTax = async (id: number) => {
+    if (!confirm('ยืนยันการลบรายการภาษีซื้อนี้?')) return;
+
+    try {
+      const response = await fetch(`/api/purchase-taxes/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        fetchPurchaseTaxes();
+      } else {
+        alert('ไม่สามารถลบได้');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  // Summary calculations
+  const totalServiceAmount = purchaseTaxes.reduce((sum, t) => sum + parseFloat(t.serviceAmount || 0), 0);
+  const totalWithholdingTax = purchaseTaxes.reduce((sum, t) => sum + parseFloat(t.withholdingTaxAmount || 0), 0);
+  const totalVat = purchaseTaxes.reduce((sum, t) => sum + parseFloat(t.vatAmount || 0), 0);
+  const grandTotal = purchaseTaxes.reduce((sum, t) => sum + parseFloat(t.totalAmount || 0), 0);
+
   return (
     <Card>
       <CardHeader>
@@ -2941,19 +4059,341 @@ function TaxTab() {
             <FileCheck className="w-5 h-5" />
             ระบบจัดการภาษีซื้อ
           </h3>
-          <Button size="sm" className="text-xs sm:text-sm">
+          <Button size="sm" className="text-xs sm:text-sm" onClick={handleOpenModal}>
             <Plus className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">เพิ่มใบกำกับภาษี</span>
+            <span className="hidden sm:inline">เพิ่มภาษีซื้อ</span>
           </Button>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-center py-8 sm:py-12 text-gray-500 bg-gray-50 rounded-lg">
-          <FileCheck className="w-12 sm:w-16 h-12 sm:h-16 mx-auto mb-4 text-gray-300" />
-          <p className="font-medium text-sm sm:text-base">ยังไม่มีใบกำกับภาษีซื้อ</p>
-          <p className="text-xs sm:text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-xs text-gray-600">ยอดค่าบริการรวม</p>
+            <p className="text-lg font-bold text-blue-600">{totalServiceAmount.toLocaleString()} ฿</p>
+          </div>
+          <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+            <p className="text-xs text-gray-600">ภาษี ณ ที่จ่ายรวม</p>
+            <p className="text-lg font-bold text-orange-600">{totalWithholdingTax.toLocaleString()} ฿</p>
+          </div>
+          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+            <p className="text-xs text-gray-600">ภาษีซื้อรวม (VAT)</p>
+            <p className="text-lg font-bold text-green-600">{totalVat.toLocaleString()} ฿</p>
+          </div>
+          <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+            <p className="text-xs text-gray-600">สรุปยอดรวม</p>
+            <p className="text-lg font-bold text-purple-600">{grandTotal.toLocaleString()} ฿</p>
+          </div>
         </div>
+
+        {loading ? (
+          <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
+        ) : purchaseTaxes.length === 0 ? (
+          <div className="text-center py-8 sm:py-12 text-gray-500 bg-gray-50 rounded-lg">
+            <FileCheck className="w-12 sm:w-16 h-12 sm:h-16 mx-auto mb-4 text-gray-300" />
+            <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการภาษีซื้อ</p>
+            <p className="text-xs sm:text-sm mt-2">คลิกปุ่ม "เพิ่มใบกำกับภาษี" เพื่อเริ่มบันทึก</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left py-3 px-4 font-medium">เลขที่เอกสาร</th>
+                  <th className="text-left py-3 px-4 font-medium">ผู้ขาย</th>
+                  <th className="text-left py-3 px-4 font-medium">วันที่</th>
+                  <th className="text-right py-3 px-4 font-medium">ค่าบริการ</th>
+                  <th className="text-center py-3 px-4 font-medium">หัก ณ ที่จ่าย</th>
+                  <th className="text-right py-3 px-4 font-medium">ภาษี ณ ที่จ่าย</th>
+                  <th className="text-right py-3 px-4 font-medium">ภาษีซื้อ</th>
+                  <th className="text-right py-3 px-4 font-medium">สรุปยอด</th>
+                  <th className="text-center py-3 px-4 font-medium">ไฟล์แนบ</th>
+                  <th className="text-center py-3 px-4 font-medium">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchaseTaxes.map((tax) => (
+                  <tr key={tax.id} className="border-t hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <span className="font-medium text-blue-600">{tax.referenceNumber}</span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">{tax.vendorName || '-'}</td>
+                    <td className="py-3 px-4">{formatDate(tax.taxDate)}</td>
+                    <td className="py-3 px-4 text-right font-medium">
+                      {parseFloat(tax.serviceAmount).toLocaleString()} ฿
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      {tax.hasWithholdingTax ? (
+                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">ออก</span>
+                      ) : (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded text-xs">ไม่ออก</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right text-orange-600">
+                      {parseFloat(tax.withholdingTaxAmount).toLocaleString()} ฿
+                    </td>
+                    <td className="py-3 px-4 text-right text-green-600">
+                      {parseFloat(tax.vatAmount).toLocaleString()} ฿
+                    </td>
+                    <td className="py-3 px-4 text-right font-medium text-purple-600">
+                      {parseFloat(tax.totalAmount).toLocaleString()} ฿
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      {tax.slipUrl ? (
+                        <a 
+                          href={tax.slipUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          <FileText className="w-3 h-3" />
+                          ไฟล์หลักฐาน
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1 justify-center">
+                        <button
+                          onClick={() => handleEditTax(tax)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                          title="แก้ไข"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTax(tax.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                          title="ลบ"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
+
+      {/* Purchase Tax Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">
+                {editingTax ? 'แก้ไขภาษีซื้อ' : 'เพิ่มภาษีซื้อ'}
+              </h2>
+              <button onClick={() => setShowModal(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* Reference Number & Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">เลขที่เอกสารอ้างอิง *</label>
+                  <input
+                    type="text"
+                    value={formData.referenceNumber}
+                    onChange={(e) => setFormData(prev => ({ ...prev, referenceNumber: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="เลขที่ใบกำกับภาษี"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">วันที่ใบกำกับภาษี</label>
+                  <input
+                    type="date"
+                    value={formData.taxDate}
+                    onChange={(e) => setFormData(prev => ({ ...prev, taxDate: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+              </div>
+
+              {/* Vendor Info - From Quotation (Read-only) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Wholesale/ผู้ให้บริการ</label>
+                  <input
+                    type="text"
+                    value={formData.vendorName || 'ไม่ระบุ Wholesale ในใบเสนอราคา'}
+                    className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-700"
+                    readOnly
+                  />
+                  <p className="text-xs text-gray-500 mt-1">* อ้างอิงจากใบเสนอราคา</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">เลขประจำตัวผู้เสียภาษี</label>
+                  <input
+                    type="text"
+                    value={formData.vendorTaxId || '-'}
+                    className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-700"
+                    placeholder="เลข 13 หลัก"
+                    readOnly
+                  />
+                </div>
+              </div>
+
+              {/* Service Amount */}
+              <div>
+                <label className="block text-sm font-medium mb-1">ยอดค่าบริการ (ก่อน VAT) *</label>
+                <input
+                  type="number"
+                  value={formData.serviceAmount}
+                  onChange={(e) => setFormData(prev => ({ ...prev, serviceAmount: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="0.00"
+                  step="0.01"
+                />
+              </div>
+
+              {/* Withholding Tax Toggle */}
+              <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                {isEditingWithholdingTaxRecord ? (
+                  // Editing a record that already has withholding tax - locked, must delete to remove
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-orange-700">
+                      <CheckCircle className="w-5 h-5" />
+                      <span className="font-medium">ออกใบหัก ณ ที่จ่ายแล้ว ({formData.withholdingTaxRate}%)</span>
+                    </div>
+                    <p className="text-sm text-orange-600">หากต้องการยกเลิกหรือเปลี่ยนอัตรา กรุณาลบรายการนี้และสร้างใหม่</p>
+                  </div>
+                ) : canIssueWithholdingTax ? (
+                  // Can issue new withholding tax
+                  <>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.hasWithholdingTax}
+                        onChange={(e) => setFormData(prev => ({ ...prev, hasWithholdingTax: e.target.checked }))}
+                        className="w-5 h-5 rounded text-orange-600"
+                      />
+                      <span className="font-medium">ต้องการออกใบหัก ณ ที่จ่าย</span>
+                    </label>
+                    
+                    {formData.hasWithholdingTax && (
+                      <div className="mt-3">
+                        <label className="block text-sm font-medium mb-1">อัตราภาษี ณ ที่จ่าย (%)</label>
+                        <select
+                          value={formData.withholdingTaxRate}
+                          onChange={(e) => setFormData(prev => ({ ...prev, withholdingTaxRate: e.target.value }))}
+                          className="w-full px-3 py-2 border rounded-lg bg-white"
+                        >
+                          <option value="3">3%</option>
+                          <option value="5">5%</option>
+                        </select>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  // Cannot issue - already issued on another record
+                  <div className="flex items-center gap-2 text-orange-700">
+                    <XCircle className="w-5 h-5" />
+                    <span className="font-medium">ไม่สามารถออกใบหัก ณ ที่จ่ายได้ เนื่องจากมีการออกไปแล้ว</span>
+                  </div>
+                )}
+              </div>
+
+              {/* VAT Rate */}
+              <div>
+                <label className="block text-sm font-medium mb-1">อัตราภาษีมูลค่าเพิ่ม (%)</label>
+                <select
+                  value={formData.vatRate}
+                  onChange={(e) => setFormData(prev => ({ ...prev, vatRate: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="0">0%</option>
+                  <option value="7">7%</option>
+                </select>
+              </div>
+
+              {/* Calculated Summary */}
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
+                <h4 className="font-medium text-blue-900 mb-3">สรุปการคำนวณ</h4>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">ยอดค่าบริการ:</span>
+                  <span className="font-medium">{serviceAmountNum.toLocaleString()} ฿</span>
+                </div>
+                {formData.hasWithholdingTax && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">ภาษี ณ ที่จ่าย ({withholdingTaxRate}%):</span>
+                    <span className="font-medium text-orange-600">-{withholdingTaxAmount.toLocaleString()} ฿</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">ภาษีซื้อ VAT ({vatRate}%):</span>
+                  <span className="font-medium text-green-600">+{vatAmount.toLocaleString()} ฿</span>
+                </div>
+                <div className="flex justify-between text-base pt-2 border-t border-blue-200">
+                  <span className="font-medium text-blue-900">สรุปยอดที่ต้องจ่าย:</span>
+                  <span className="font-bold text-purple-600">{totalAmount.toLocaleString()} ฿</span>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium mb-1">หมายเหตุ</label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  rows={2}
+                  placeholder="รายละเอียดเพิ่มเติม"
+                />
+              </div>
+
+              {/* File Upload */}
+              <div>
+                <label className="block text-sm font-medium mb-1">แนบไฟล์ใบกำกับภาษี</label>
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  accept="image/*,.pdf"
+                  className="w-full px-3 py-2 border rounded-lg"
+                  disabled={uploading}
+                />
+                {uploading && <p className="text-xs text-gray-500 mt-1">กำลังอัพโหลด...</p>}
+                {formData.slipUrl && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-green-600" />
+                    <a 
+                      href={formData.slipUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      ดูไฟล์ที่อัพโหลด
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, slipUrl: '' }))}
+                      className="text-xs text-red-600 hover:underline"
+                    >
+                      ลบ
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4 border-t">
+                <Button variant="outline" onClick={() => setShowModal(false)} className="flex-1">
+                  ยกเลิก
+                </Button>
+                <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700">
+                  {editingTax ? 'บันทึกการแก้ไข' : 'บันทึก'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
@@ -3042,7 +4482,185 @@ function DocumentsTab() {
   );
 }
 
-function WholesaleCostTab() {
+function WholesaleCostTab({ quotation }: { quotation: any }) {
+  const { userId, userName } = useCurrentUser();
+  const [costs, setCosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCostModal, setShowCostModal] = useState(false);
+  const [editingCostId, setEditingCostId] = useState<number | null>(null);
+  const [costAmount, setCostAmount] = useState('');
+  const [costType, setCostType] = useState('OTHER');
+  const [costDescription, setCostDescription] = useState('');
+  const [costNotes, setCostNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Slip/attachment states
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [slipPreview, setSlipPreview] = useState<string | null>(null);
+
+  // Cost type options
+  const costTypeOptions = [
+    { value: 'TOUR_TOTAL', label: 'ค่าทัวร์รวมทั้งหมด' },
+    { value: 'ROOM', label: 'ค่าห้อง' },
+    { value: 'FOOD', label: 'ค่าอาหาร' },
+    { value: 'AIRLINE_TICKET', label: 'ค่าตั๋วเครื่องบิน' },
+    { value: 'OTHER', label: 'อื่นๆ' },
+  ];
+
+  const getCostTypeLabel = (type: string) => {
+    return costTypeOptions.find(o => o.value === type)?.label || type;
+  };
+
+  useEffect(() => {
+    fetchCosts();
+  }, [quotation.id]);
+
+  const fetchCosts = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/wholesale-costs?quotationId=${quotation.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setCosts(data.costs || []);
+      }
+    } catch (error) {
+      console.error('Error fetching costs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalCost = costs.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+
+  const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSlipFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSlipPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveCost = async () => {
+    if (!costAmount) {
+      alert('กรุณาระบุยอดเงิน');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const isEditing = editingCostId !== null;
+
+      // Upload slip if exists
+      let uploadedSlipUrl = null;
+      if (slipFile) {
+        const formData = new FormData();
+        formData.append('file', slipFile);
+        formData.append('folder', 'wholesale-costs');
+        
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          uploadedSlipUrl = uploadData.url;
+        } else {
+          const uploadError = await uploadRes.json();
+          alert(uploadError.error || 'ไม่สามารถอัพโหลดหลักฐานได้');
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      const url = isEditing 
+        ? `/api/wholesale-costs/${editingCostId}` 
+        : '/api/wholesale-costs';
+      
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quotationId: quotation.id,
+          wholesaleId: quotation.wholesaleId || null,
+          wholesaleName: quotation.wholesaleName || null,
+          costType: costType,
+          description: costDescription,
+          amount: parseFloat(parseFloat(costAmount).toFixed(2)),
+          notes: costNotes,
+          slipUrl: uploadedSlipUrl,
+          createdById: userId,
+          createdByName: userName,
+          updatedById: userId,
+          updatedByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || (isEditing ? 'แก้ไขเรียบร้อย' : 'บันทึกเรียบร้อย'));
+        setShowCostModal(false);
+        resetForm();
+        fetchCosts();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึก');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditCost = (cost: any) => {
+    setEditingCostId(cost.id);
+    setCostAmount(parseFloat(cost.amount || 0).toFixed(2));
+    setCostType(cost.costType || 'OTHER');
+    setCostDescription(cost.description || '');
+    setCostNotes(cost.notes || '');
+    setSlipFile(null);
+    setSlipPreview(cost.slipUrl || null);
+    setShowCostModal(true);
+  };
+
+  const handleDeleteCost = async (costId: number) => {
+    const confirmed = window.confirm('ต้องการลบรายการต้นทุนนี้ใช่หรือไม่?');
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/wholesale-costs/${costId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        alert('ลบเรียบร้อย');
+        fetchCosts();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการลบ');
+    }
+  };
+
+  const resetForm = () => {
+    setEditingCostId(null);
+    setCostAmount('');
+    setCostType('OTHER');
+    setCostDescription('');
+    setCostNotes('');
+    setSlipFile(null);
+    setSlipPreview(null);
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -3051,7 +4669,11 @@ function WholesaleCostTab() {
             <PackageCheck className="w-5 h-5" />
             รายการต้นทุนโฮลเซลล์
           </h3>
-          <Button size="sm" className="text-xs sm:text-sm">
+          <Button 
+            size="sm" 
+            className="text-xs sm:text-sm bg-purple-600 hover:bg-purple-700"
+            onClick={() => setShowCostModal(true)}
+          >
             <Plus className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">เพิ่มรายการ</span>
           </Button>
@@ -3059,23 +4681,200 @@ function WholesaleCostTab() {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          {/* Summary */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div className="p-3 sm:p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">ต้นทุนโฮลเซลล์</p>
-              <p className="text-lg sm:text-2xl font-bold text-purple-600">0 ฿</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">ต้นทุนโฮลเซลล์รวม</p>
+              <p className="text-lg sm:text-2xl font-bold text-purple-600">{totalCost.toLocaleString()} ฿</p>
             </div>
             <div className="p-3 sm:p-4 bg-indigo-50 rounded-lg border border-indigo-200">
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">ค่าใช้จ่ายอื่นๆ</p>
-              <p className="text-lg sm:text-2xl font-bold text-indigo-600">0 ฿</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-1">Wholesale</p>
+              <p className="text-lg sm:text-xl font-bold text-indigo-600">{quotation.wholesaleName || 'ไม่ระบุ'}</p>
             </div>
           </div>
-          <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
-            <PackageCheck className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
-            <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการต้นทุนโฮลเซลล์</p>
-            <p className="text-xs sm:text-sm mt-1">Module นี้พร้อมรอการพัฒนา</p>
-          </div>
+
+          {/* Cost Items Table */}
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
+          ) : costs.length === 0 ? (
+            <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <PackageCheck className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการต้นทุนโฮลเซลล์</p>
+              <p className="text-xs sm:text-sm mt-1">คลิกปุ่มเพิ่มรายการเพื่อเริ่มต้น</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-3 px-4 font-medium">ประเภท</th>
+                    <th className="text-left py-3 px-4 font-medium">รายละเอียด</th>
+                    <th className="text-right py-3 px-4 font-medium">ยอดเงิน</th>
+                    <th className="text-left py-3 px-4 font-medium">หมายเหตุ</th>
+                    <th className="text-center py-3 px-4 font-medium">ไฟล์แนบ</th>
+                    <th className="text-left py-3 px-4 font-medium">ผู้บันทึก</th>
+                    <th className="text-center py-3 px-4 font-medium">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {costs.map((cost) => (
+                    <tr key={cost.id} className="border-t hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                          {getCostTypeLabel(cost.costType)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">{cost.description || '-'}</td>
+                      <td className="py-3 px-4 text-right font-medium text-purple-600">
+                        {parseFloat(cost.amount).toLocaleString()} ฿
+                      </td>
+                      <td className="py-3 px-4 text-gray-600 text-xs">{cost.notes || '-'}</td>
+                      <td className="py-3 px-4 text-center">
+                        {cost.slipUrl ? (
+                          <a 
+                            href={cost.slipUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
+                          >
+                            <FileText className="w-3 h-3" />
+                            ไฟล์หลักฐาน
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600 text-xs">{cost.createdByName || '-'}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1 justify-center">
+                          <button
+                            onClick={() => handleEditCost(cost)}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                            title="แก้ไข"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCost(cost.id)}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                            title="ลบ"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </CardContent>
+
+      {/* Cost Modal */}
+      {showCostModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold text-purple-700">
+                {editingCostId ? 'แก้ไขต้นทุน Wholesale' : 'เพิ่มต้นทุน Wholesale'}
+              </h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Wholesale</label>
+                <div className="w-full border rounded-lg px-3 py-2 bg-gray-100 text-gray-700">
+                  {quotation.wholesaleName || 'ไม่ระบุ Wholesale'}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">ประเภทต้นทุน *</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={costType}
+                  onChange={(e) => setCostType(e.target.value)}
+                >
+                  {costTypeOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">ยอดเงิน *</label>
+                <input
+                  type="number" 
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={costAmount}
+                  onChange={(e) => setCostAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">รายละเอียด</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={costDescription}
+                  onChange={(e) => setCostDescription(e.target.value)}
+                  placeholder="เช่น ค่าทัวร์ Wholesale"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">หมายเหตุ</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={costNotes}
+                  onChange={(e) => setCostNotes(e.target.value)}
+                  rows={2}
+                  placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">แนบหลักฐาน</label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  onChange={handleSlipChange}
+                />
+                {slipPreview && (
+                  <div className="mt-2">
+                    {slipFile?.type === 'application/pdf' ? (
+                      <div className="flex items-center gap-2 p-2 bg-gray-100 rounded border">
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">{slipFile.name}</span>
+                      </div>
+                    ) : slipPreview.toLowerCase().endsWith('.pdf') ? (
+                      <a 
+                        href={slipPreview} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 bg-gray-100 rounded border text-blue-600 hover:text-blue-800"
+                      >
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">ดูไฟล์ PDF ที่แนบไว้</span>
+                      </a>
+                    ) : (
+                      <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-4 border-t flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setShowCostModal(false); resetForm(); }}>
+                ยกเลิก
+              </Button>
+              <Button onClick={handleSaveCost} disabled={submitting} className="bg-purple-600 hover:bg-purple-700">
+                {submitting ? 'กำลังบันทึก...' : (editingCostId ? 'บันทึกการแก้ไข' : 'บันทึกต้นทุน')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

@@ -88,6 +88,24 @@ export async function GET(
       }
     }
 
+    // Get wholesale name and taxId from DB2 if wholesaleId exists
+    let wholesaleName = null;
+    let wholesaleTaxId = null;
+    if (quotation.wholesaleId) {
+      try {
+        const wholesales = await db2.query(
+          `SELECT wholesale_name_th as nameTh, wholesale_name_en as nameEn, textid as taxId FROM tb_wholesale WHERE id = ?`,
+          [quotation.wholesaleId]
+        );
+        if (wholesales && wholesales.length > 0) {
+          wholesaleName = wholesales[0].nameTh || wholesales[0].nameEn || null;
+          wholesaleTaxId = wholesales[0].taxId || null;
+        }
+      } catch (err) {
+        console.error('Error fetching wholesale name from DB2:', err);
+      }
+    }
+
     // Calculate invoiced amount (exclude CANCELLED/VOIDED invoices)
     const invoicedResult = await conn.query(
       `SELECT COALESCE(SUM(grandTotal), 0) as totalInvoiced
@@ -129,6 +147,8 @@ export async function GET(
     const result = {
       ...quotation,
       saleName,
+      wholesaleName,
+      wholesaleTaxId,
       items,
       totalInvoiced,
       remainingAmount,

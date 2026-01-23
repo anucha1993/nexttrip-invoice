@@ -49,6 +49,11 @@ interface Transaction {
   referenceNumber: string | null;
   notes: string | null;
   createdAt: string;
+  bankAccountId: number | null;
+  chequeNumber: string | null;
+  chequeDate: string | null;
+  chequeBankId: number | null;
+  slipUrl: string | null;
 }
 
 interface GroupedData {
@@ -126,6 +131,10 @@ export default function PaymentsPage() {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
 
+  // Slip file for edit modal
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [slipPreview, setSlipPreview] = useState<string | null>(null);
+
   useEffect(() => {
     fetchTransactions();
   }, [filterType, filterStatus]);
@@ -189,11 +198,18 @@ export default function PaymentsPage() {
       referenceNumber: tx.referenceNumber || '',
       notes: tx.notes || '',
       refundReason: '',
-      bankAccountId: '',
-      chequeNumber: '',
-      chequeDate: '',
-      chequeBankId: '',
+      bankAccountId: tx.bankAccountId ? tx.bankAccountId.toString() : '',
+      chequeNumber: tx.chequeNumber || '',
+      chequeDate: tx.chequeDate ? tx.chequeDate.slice(0, 10) : '',
+      chequeBankId: tx.chequeBankId ? tx.chequeBankId.toString() : '',
     });
+    // Set slip preview if exists
+    if (tx.slipUrl) {
+      setSlipPreview(tx.slipUrl);
+    } else {
+      setSlipPreview(null);
+    }
+    setSlipFile(null);
     setEditModalOpen(true);
   };
 
@@ -201,6 +217,21 @@ export default function PaymentsPage() {
   const closeEditModal = () => {
     setEditModalOpen(false);
     setEditingTransaction(null);
+    setSlipFile(null);
+    setSlipPreview(null);
+  };
+
+  // Handle slip file change
+  const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSlipFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSlipPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Save transaction edit
@@ -209,6 +240,30 @@ export default function PaymentsPage() {
 
     try {
       setSaving(true);
+
+      // Upload slip if exists
+      let uploadedSlipUrl = editingTransaction.slipUrl; // Keep existing if no new file
+      if (slipFile) {
+        const formData = new FormData();
+        formData.append('file', slipFile);
+        formData.append('folder', 'slips');
+        
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          uploadedSlipUrl = uploadData.url;
+        } else {
+          const uploadError = await uploadRes.json();
+          alert(uploadError.error || 'ไม่สามารถอัพโหลดหลักฐานได้');
+          setSaving(false);
+          return;
+        }
+      }
+
       const response = await fetch(`/api/customer-transactions/${editingTransaction.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -222,6 +277,9 @@ export default function PaymentsPage() {
           chequeNumber: editFormData.chequeNumber || null,
           chequeDate: editFormData.chequeDate || null,
           chequeBankId: editFormData.chequeBankId ? parseInt(editFormData.chequeBankId) : null,
+          slipUrl: uploadedSlipUrl,
+          // Auto-confirm when slip is newly attached (for PENDING status)
+          confirmOnSlip: !!slipFile,
           updatedById: userId,
           updatedByName: userName,
         }),
@@ -637,7 +695,7 @@ export default function PaymentsPage() {
                                             <td className="py-2 px-4 text-center">
                                               <button
                                                 onClick={() => openEditModal(tx)}
-                                                className="inline-flex items-center justify-center p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                                className="inline-flex items-center justify-center p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
                                                 title="แก้ไข"
                                               >
                                                 <Pencil className="w-4 h-4" />
@@ -784,7 +842,7 @@ export default function PaymentsPage() {
                       <option value="">-- เลือกบัญชี --</option>
                       {bankAccounts.map(acc => (
                         <option key={acc.id} value={acc.id}>
-                          {acc.bankNameTH}
+                          {acc.displayName}
                         </option>
                       ))}
                     </select>
@@ -844,6 +902,43 @@ export default function PaymentsPage() {
                   </div>
                 </div>
               )}
+
+              {/* แนบสลิป/หลักฐาน */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  แนบสลิป/หลักฐาน
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  onChange={handleSlipChange}
+                />
+                {slipPreview && (
+                  <div className="mt-2">
+                    {slipFile?.type === 'application/pdf' ? (
+                      <div className="flex items-center gap-2 p-2 bg-gray-100 rounded border">
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">{slipFile.name}</span>
+                      </div>
+                    ) : slipPreview.toLowerCase().endsWith('.pdf') ? (
+                      <a 
+                        href={slipPreview} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 bg-gray-100 rounded border text-blue-600 hover:text-blue-800"
+                      >
+                        <span className="text-red-600">📄</span>
+                        <span className="text-sm">ดูไฟล์ PDF ที่แนบไว้</span>
+                        
+                        <Eye className="w-4 h-4" />
+                      </a>
+                    ) : (
+                      <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Reference Number */}
               <div>

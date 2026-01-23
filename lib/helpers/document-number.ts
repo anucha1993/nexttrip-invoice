@@ -1,7 +1,7 @@
 // lib/helpers/document-number.ts
 // Helper สำหรับ Generate เลขที่เอกสาร (Invoice, Receipt, Tax Invoice, Credit Note, Transaction)
 
-export type DocumentType = 'INVOICE' | 'RECEIPT' | 'TAX_INVOICE' | 'CREDIT_NOTE' | 'PAYMENT' | 'REFUND';
+export type DocumentType = 'INVOICE' | 'RECEIPT' | 'TAX_INVOICE' | 'CREDIT_NOTE' | 'PAYMENT' | 'REFUND' | 'WS_PAYMENT' | 'WS_REFUND';
 
 /**
  * Generate เลขที่เอกสารถัดไป (Thread-safe)
@@ -59,6 +59,18 @@ export async function generateDocumentNumber(
     case 'REFUND':
       prefix = `RF${yy}${mm}`;        // RF2601
       tableName = 'customer_transactions';
+      columnName = 'transactionNumber';
+      whereClause = ` AND transactionType = 'REFUND'`;
+      break;
+    case 'WS_PAYMENT':
+      prefix = `WP${yy}${mm}`;        // WP2601 (Wholesale Payment)
+      tableName = 'wholesale_transactions';
+      columnName = 'transactionNumber';
+      whereClause = ` AND transactionType = 'PAYMENT'`;
+      break;
+    case 'WS_REFUND':
+      prefix = `WR${yy}${mm}`;        // WR2601 (Wholesale Refund)
+      tableName = 'wholesale_transactions';
       columnName = 'transactionNumber';
       whereClause = ` AND transactionType = 'REFUND'`;
       break;

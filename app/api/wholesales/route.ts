@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
         id, 
         code, 
         wholesale_name_th as nameTh, 
-        wholesale_name_en as nameEn
+        wholesale_name_en as nameEn,
+        textid as taxId
       FROM tb_wholesale 
       WHERE status = 'on'
       ORDER BY wholesale_name_th ASC
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
       code: row.code || '',
       nameTh: row.nameTh || '',
       nameEn: row.nameEn || '',
+      taxId: row.taxId || '',
     }));
 
     return NextResponse.json(wholesales);
