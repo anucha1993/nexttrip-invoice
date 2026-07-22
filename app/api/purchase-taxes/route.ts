@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
         pt.*,
         u.name as createdByName
       FROM purchase_taxes pt
-      LEFT JOIN users u ON pt.createdBy = u.id
+      LEFT JOIN user_accounts u ON pt.createdBy = u.id
       WHERE pt.quotationId = ?
       ORDER BY pt.createdAt DESC
     `, [quotationId]);
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     const newRecords = await connection.query(`
       SELECT pt.*, u.name as createdByName
       FROM purchase_taxes pt
-      LEFT JOIN users u ON pt.createdBy = u.id
+      LEFT JOIN user_accounts u ON pt.createdBy = u.id
       WHERE pt.id = ?
     `, [insertId]);
 

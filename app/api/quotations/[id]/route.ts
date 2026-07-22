@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import db2 from '@/lib/db2';
+import { fetchSale, fetchWholesaler } from '@/lib/services/tour-api';
 
 // GET - Get single quotation by ID
 export async function GET(
@@ -34,7 +34,7 @@ export async function GET(
         u.name as createdByName
       FROM quotations q
       LEFT JOIN customers c ON q.customerId = c.id
-      LEFT JOIN users u ON q.createdById = u.id
+      LEFT JOIN user_accounts u ON q.createdById = u.id
       WHERE q.id = ?`,
       [id]
     );
@@ -72,37 +72,21 @@ export async function GET(
       [id]
     );
 
-    // Get sale name from DB2 if saleId exists
-    let saleName = null;
+    // Get sale name from tour-api if saleId exists
+    let saleName: string | null = null;
     if (quotation.saleId) {
-      try {
-        const saleUsers = await db2.query(
-          `SELECT name FROM users WHERE id = ?`,
-          [quotation.saleId]
-        );
-        if (saleUsers && saleUsers.length > 0) {
-          saleName = saleUsers[0].name;
-        }
-      } catch (err) {
-        console.error('Error fetching sale name from DB2:', err);
-      }
+      const sale = await fetchSale(Number(quotation.saleId));
+      if (sale) saleName = sale.name;
     }
 
-    // Get wholesale name and taxId from DB2 if wholesaleId exists
-    let wholesaleName = null;
-    let wholesaleTaxId = null;
+    // Get wholesale name and taxId from tour-api if wholesaleId exists
+    let wholesaleName: string | null = null;
+    let wholesaleTaxId: string | null = null;
     if (quotation.wholesaleId) {
-      try {
-        const wholesales = await db2.query(
-          `SELECT wholesale_name_th as nameTh, wholesale_name_en as nameEn, textid as taxId FROM tb_wholesale WHERE id = ?`,
-          [quotation.wholesaleId]
-        );
-        if (wholesales && wholesales.length > 0) {
-          wholesaleName = wholesales[0].nameTh || wholesales[0].nameEn || null;
-          wholesaleTaxId = wholesales[0].taxId || null;
-        }
-      } catch (err) {
-        console.error('Error fetching wholesale name from DB2:', err);
+      const wholesale = await fetchWholesaler(Number(quotation.wholesaleId));
+      if (wholesale) {
+        wholesaleName = wholesale.nameTh || wholesale.nameEn || null;
+        wholesaleTaxId = wholesale.taxId || null;
       }
     }
 

@@ -10,24 +10,23 @@ datasource db {
 }
 
 // ============================================
-// User & Authentication
+// UserAccount — identity comes from tour-api (verified via its login API).
+// This table only links a tour-api user to invoice-local permissions;
+// no password is stored here because authentication happens remotely.
 // ============================================
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  profileId String?
-  profile   Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  avatar    String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model UserAccount {
+  id         String   @id @default(cuid())
+  externalId Int?     @unique // tour-api users.id
+  email      String   @unique
+  name       String
+  role       String?  // tour-api role snapshot (admin/sale/it)
+  profileId  String?
+  profile    Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  isActive   Boolean  @default(true) // invoice-side access toggle (independent of tour-api)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  invoices   Invoice[]
-  quotations Quotation[]
-
-  @@map("users")
+  @@map("user_accounts")
 }
 
 model Profile {
@@ -39,7 +38,7 @@ model Profile {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  users       User[]
+  accounts    UserAccount[]
   permissions ProfilePermission[]
 
   @@map("profiles")
@@ -230,9 +229,8 @@ model Quotation {
   notes             String?         @db.Text
   cancelNote        String?         @db.Text
 
-  // ผู้สร้าง/แก้ไข
+  // ผู้สร้าง/แก้ไข (id อ้างอิง user_accounts.id หรือ 'system'; ไม่มี FK constraint)
   createdById       String
-  createdBy         User            @relation(fields: [createdById], references: [id])
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -311,7 +309,6 @@ model Invoice {
   customerId    String
   customer      Customer      @relation(fields: [customerId], references: [id])
   createdById   String
-  createdBy     User          @relation(fields: [createdById], references: [id])
   issueDate     DateTime      @default(now())
   dueDate       DateTime
   subtotal      Decimal       @db.Decimal(12, 2)

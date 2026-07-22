@@ -1,14 +1,15 @@
+require('dotenv').config();
 const mariadb = require('mariadb');
 
 async function testConnection() {
   console.log('Testing database connection...');
   
   const pool = mariadb.createPool({
-    host: '103.80.48.25',
-    port: 3306,
-    user: 'mailfore_nexttrip_invoice',
-    password: 'G2pvPm5acsB*o_z0',
-    database: 'nexttrip_invoice',
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '3306', 10),
+    user: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
     connectionLimit: 5,
     acquireTimeout: 30000,
     connectTimeout: 10000,
@@ -19,7 +20,7 @@ async function testConnection() {
     const conn = await pool.getConnection();
     console.log('✅ Connection successful!');
     
-    const rows = await conn.query('SELECT COUNT(*) as count FROM users');
+    const rows = await conn.query('SELECT COUNT(*) as count FROM user_accounts');
     console.log('User count:', rows[0].count);
     
     conn.release();

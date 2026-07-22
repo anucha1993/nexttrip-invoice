@@ -13,7 +13,7 @@ export async function GET(
     const rows = await connection.query(`
       SELECT pt.*, u.name as createdByName
       FROM purchase_taxes pt
-      LEFT JOIN users u ON pt.createdBy = u.id
+      LEFT JOIN user_accounts u ON pt.createdBy = u.id
       WHERE pt.id = ?
     `, [id]);
 
@@ -118,7 +118,7 @@ export async function PUT(
     const updatedRecord = await connection.query(`
       SELECT pt.*, u.name as createdByName
       FROM purchase_taxes pt
-      LEFT JOIN users u ON pt.createdBy = u.id
+      LEFT JOIN user_accounts u ON pt.createdBy = u.id
       WHERE pt.id = ?
     `, [id]);
 

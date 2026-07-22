@@ -144,5 +144,5 @@ ADD COLUMN IF NOT EXISTS balanceAmount DECIMAL(15,2) GENERATED ALWAYS AS (grandT
 
 -- ======================================
 -- วิธี Run:
--- mysql -h 103.80.48.25 -u mailfore_nexttrip_invoice -p nexttrip_invoice < migrations/007_customer_transactions.sql
+-- mysql -h 119.59.124.207 -u invoice_admin -p invoices < migrations/007_customer_transactions.sql
 -- ======================================

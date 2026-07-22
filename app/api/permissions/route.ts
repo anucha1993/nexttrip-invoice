@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mariadb from 'mariadb';
+import { dbConfig } from '@/lib/db-config';
 
 const pool = mariadb.createPool({
-  host: '103.80.48.25',
-  port: 3306,
-  user: 'mailfore_nexttrip_invoice',
-  password: 'G2pvPm5acsB*o_z0',
-  database: 'nexttrip_invoice',
+  ...dbConfig,
   connectionLimit: 5,
 });
 

@@ -1,7 +1,16 @@
 import path from 'node:path';
 import { defineConfig } from 'prisma/config';
+import 'dotenv/config';
 
-const DATABASE_URL = "mysql://mailfore_nexttrip_invoice:G2pvPm5acsB*o_z0@103.80.48.25:3306/nexttrip_invoice";
+const {
+  DB_HOST,
+  DB_PORT = '3306',
+  DB_USERNAME = '',
+  DB_PASSWORD = '',
+  DB_DATABASE = '',
+} = process.env;
+
+const DATABASE_URL = `mysql://${encodeURIComponent(DB_USERNAME)}:${encodeURIComponent(DB_PASSWORD)}@${DB_HOST}:${DB_PORT}/${DB_DATABASE}`;
 
 export default defineConfig({
   schema: path.join(__dirname, 'prisma', 'schema.prisma'),

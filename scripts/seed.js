@@ -1,13 +1,14 @@
+require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const { PrismaMariaDb } = require('@prisma/adapter-mariadb');
 const bcrypt = require('bcryptjs');
 
 const adapter = new PrismaMariaDb({
-  host: '103.80.48.25',
-  port: 3306,
-  user: 'mailfore_nexttrip_invoice',
-  password: 'G2pvPm5acsB*o_z0',
-  database: 'nexttrip_invoice',
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '3306', 10),
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
   connectionLimit: 5,
 });
 const prisma = new PrismaClient({ adapter });
@@ -194,40 +195,16 @@ async function seed() {
     }
     console.log(`    - Added ${viewerPermissions.length} permissions`);
     
-    // 3. Create Admin User
-    console.log('\n👤 Creating Admin User...');
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    
-    const adminUser = await prisma.user.upsert({
-      where: { email: 'admin@nexttrip.com' },
-      update: {
-        name: 'Admin User',
-        password: hashedPassword,
-        profileId: adminProfile.id,
-        isActive: true,
-      },
-      create: {
-        email: 'admin@nexttrip.com',
-        name: 'Admin User',
-        password: hashedPassword,
-        profileId: adminProfile.id,
-        isActive: true,
-      },
-    });
-    console.log(`  ✓ Created admin user: ${adminUser.email}`);
-    console.log(`    Email: admin@nexttrip.com`);
-    console.log(`    Password: admin123`);
-    
+    // ผู้ใช้ไม่ถูก seed ที่นี่แล้ว — ตัวตนมาจาก tour-api และ user_accounts
+    // จะถูกสร้าง/ผูกอัตโนมัติเมื่อผู้ใช้ล็อกอินครั้งแรก
     console.log('\n✅ Seed completed successfully!');
     
     // Summary
     const profileCount = await prisma.profile.count();
     const permissionCount = await prisma.permission.count();
-    const userCount = await prisma.user.count();
     console.log(`\n📊 Summary:`);
     console.log(`  - Permissions: ${permissionCount}`);
     console.log(`  - Profiles: ${profileCount}`);
-    console.log(`  - Users: ${userCount}`);
     
   } catch (error) {
     console.error('Error seeding:', error);

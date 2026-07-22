@@ -1,14 +1,15 @@
+require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const { PrismaMariaDb } = require('@prisma/adapter-mariadb');
 const mariadb = require('mariadb');
 
 async function test() {
   const pool = mariadb.createPool({
-    host: '103.80.48.25',
-    port: 3306,
-    user: 'mailfore_nexttrip_invoice',
-    password: 'G2pvPm5acsB*o_z0',
-    database: 'nexttrip_invoice',
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '3306', 10),
+    user: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
     connectionLimit: 10,
     acquireTimeout: 30000,
     connectTimeout: 30000,
