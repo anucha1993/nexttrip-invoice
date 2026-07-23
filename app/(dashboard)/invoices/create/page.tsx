@@ -293,7 +293,7 @@ export default function CreateInvoicePage() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg shadow-blue-500/25">
+              <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg shadow-orange-500/25">
                 <FileText className="w-6 h-6 text-white" />
               </div>
               สร้างใบแจ้งหนี้
@@ -614,7 +614,7 @@ export default function CreateInvoicePage() {
                 <Button 
                   type="submit" 
                   disabled={loading || !selectedCustomer || !selectedQuotation || items.length === 0}
-                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
+                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
                 >
                   {loading ? (
                     <>

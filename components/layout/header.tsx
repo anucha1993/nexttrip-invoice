@@ -76,7 +76,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
         {/* Mobile Logo - shown only on mobile when sidebar is closed */}
         <div className="lg:hidden flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">NT</span>
           </div>
           <span className="font-semibold text-gray-900 text-sm sm:text-base">NextTrip</span>
@@ -90,7 +90,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <input
             type="text"
             placeholder="ค้นหา..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -141,8 +141,8 @@ export function Header({ onMenuClick }: HeaderProps) {
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-2 lg:gap-3 hover:bg-gray-50 rounded-lg p-2 transition-colors"
           >
-            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-              <User className="w-4 h-4 text-blue-600" />
+            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
+              <User className="w-4 h-4 text-white" />
             </div>
             <div className="text-left hidden lg:block">
               <p className="text-sm font-medium text-gray-900">{user?.name || 'User'}</p>

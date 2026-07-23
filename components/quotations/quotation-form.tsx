@@ -9,7 +9,8 @@ import { Select } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { 
   ArrowLeft, Save, FileText, User, Plane, Calendar, 
-  Plus, Trash2, DollarSign, ChevronDown, ChevronUp, UserPlus, Edit, X
+  Plus, Trash2, DollarSign, ChevronDown, ChevronUp, UserPlus, Edit, X,
+  Cloud, RefreshCw, Loader2, Check
 } from 'lucide-react';
 import Link from 'next/link';
 import { CustomerModal } from '@/components/customers/customer-modal';
@@ -29,6 +30,21 @@ interface Customer {
   socialId: string | null;
   source: string | null;
   isActive: boolean;
+  externalId?: number | null;
+  externalSource?: string | null;
+}
+
+// A person found in tour-api (web member or guest booking) plus how it maps
+// to a local invoice customer.
+interface ExternalCustomerResult {
+  source: 'member' | 'booking';
+  externalId: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  match:
+    | { status: 'none' }
+    | { status: 'linked' | 'matched'; customerId: string; differs: boolean; customer: Customer };
 }
 
 interface Sale {
@@ -196,6 +212,11 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [customerModalMode, setCustomerModalMode] = useState<'create' | 'edit'>('create');
 
+  // Tour-api (external) customer search
+  const [externalResults, setExternalResults] = useState<ExternalCustomerResult[]>([]);
+  const [externalLoading, setExternalLoading] = useState(false);
+  const [linkingKey, setLinkingKey] = useState<string | null>(null);
+
   // Tour search
   const [tourSearch, setTourSearch] = useState('');
   const [showTourDropdown, setShowTourDropdown] = useState(false);
@@ -295,6 +316,33 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
   useEffect(() => {
     fetchMasterData();
   }, []);
+
+  // Search tour-api customers (web members + guest bookings) as the user types
+  useEffect(() => {
+    const q = customerSearch.trim();
+    if (!showCustomerDropdown || q.length < 2) {
+      setExternalResults([]);
+      setExternalLoading(false);
+      return;
+    }
+    let active = true;
+    setExternalLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/customers/search-external?q=${encodeURIComponent(q)}`);
+        const data = res.ok ? await res.json() : null;
+        if (active) setExternalResults(Array.isArray(data?.results) ? data.results : []);
+      } catch {
+        if (active) setExternalResults([]);
+      } finally {
+        if (active) setExternalLoading(false);
+      }
+    }, 350);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [customerSearch, showCustomerDropdown]);
 
   // Generate quotation number in create mode
   useEffect(() => {
@@ -681,6 +729,80 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
     setCustomerSearch(customer.name);
   };
 
+  // Upsert a customer into the local list (used by the tour-api pull actions)
+  const upsertCustomer = (customer: Customer) => {
+    setCustomers(prev =>
+      prev.some(c => c.id === customer.id)
+        ? prev.map(c => (c.id === customer.id ? customer : c))
+        : [customer, ...prev]
+    );
+  };
+
+  // Pull a tour-api person into the invoice (create + link), then select it
+  const handleAddFromTour = async (r: ExternalCustomerResult) => {
+    const key = `${r.source}:${r.externalId}`;
+    setLinkingKey(key);
+    try {
+      const res = await fetch('/api/customers/link-tour', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          externalSource: r.source,
+          externalId: r.externalId,
+          name: r.name,
+          email: r.email,
+          phone: r.phone,
+        }),
+      });
+      if (res.ok) {
+        const customer: Customer = await res.json();
+        upsertCustomer(customer);
+        handleSelectCustomer(customer);
+      }
+    } catch (error) {
+      console.error('Error adding customer from tour:', error);
+    } finally {
+      setLinkingKey(null);
+    }
+  };
+
+  // Update an existing local customer from the tour-api record, then select it
+  const handleUpdateFromTour = async (r: ExternalCustomerResult) => {
+    if (r.match.status === 'none') return;
+    const key = `${r.source}:${r.externalId}`;
+    setLinkingKey(key);
+    try {
+      const res = await fetch('/api/customers/link-tour', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: r.match.customerId,
+          externalSource: r.source,
+          externalId: r.externalId,
+          name: r.name,
+          email: r.email,
+          phone: r.phone,
+        }),
+      });
+      if (res.ok) {
+        const customer: Customer = await res.json();
+        upsertCustomer(customer);
+        handleSelectCustomer(customer);
+      }
+    } catch (error) {
+      console.error('Error updating customer from tour:', error);
+    } finally {
+      setLinkingKey(null);
+    }
+  };
+
+  // Select the local customer already matched to a tour record
+  const handleSelectMatched = (r: ExternalCustomerResult) => {
+    if (r.match.status === 'none') return;
+    upsertCustomer(r.match.customer);
+    handleSelectCustomer(r.match.customer);
+  };
+
   // Add item row
   const addItem = (itemType: 'INCOME' | 'DISCOUNT' = 'INCOME') => {
     setItems([
@@ -956,7 +1078,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-blue-500">
+          <h1 className="text-2xl font-bold text-orange-500">
             {mode === 'create' ? 'สร้างใบเสนอราคา' : 'แก้ไขใบเสนอราคา'}
           </h1>
           <p className="text-gray-600">
@@ -1028,21 +1150,98 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   {errors.customerId && <p className="text-red-500 text-sm mt-1">{errors.customerId}</p>}
                   
                   {showCustomerDropdown && customerSearch && (
-                    <div className="absolute z-[100] w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
-                      {filteredCustomers.length > 0 ? (
-                        filteredCustomers.slice(0, 10).map(customer => (
-                          <div
-                            key={customer.id}
-                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                            onClick={() => handleSelectCustomer(customer)}
-                          >
-                            <div className="font-medium">{customer.name}</div>
-                            <div className="text-sm text-gray-500">
-                              {customer.code} {customer.phone && `• ${customer.phone}`}
-                            </div>
+                    <div className="absolute z-[100] w-full mt-1 bg-white border rounded-lg shadow-lg max-h-72 overflow-auto">
+                      {/* Local customers */}
+                      {filteredCustomers.length > 0 && (
+                        <>
+                          <div className="px-3 py-1 text-xs font-semibold text-gray-400 bg-gray-50">
+                            ลูกค้าในระบบ
                           </div>
-                        ))
-                      ) : (
+                          {filteredCustomers.slice(0, 10).map(customer => (
+                            <div
+                              key={customer.id}
+                              className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                              onClick={() => handleSelectCustomer(customer)}
+                            >
+                              <div className="font-medium flex items-center gap-2">
+                                <span className="truncate">{customer.name}</span>
+                                {customer.externalId ? (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">
+                                    <Cloud className="w-2.5 h-2.5" /> เชื่อม Tour
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {customer.code} {customer.phone && `• ${customer.phone}`}
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      )}
+
+                      {/* Tour-api customers (web members + guest bookings) */}
+                      {(externalLoading || externalResults.length > 0) && (
+                        <>
+                          <div className="px-3 py-1 text-xs font-semibold text-gray-400 bg-gray-50 flex items-center gap-1">
+                            <Cloud className="w-3 h-3" /> จากฐานลูกค้า Tour
+                            {externalLoading && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
+                          </div>
+                          {externalResults.map(r => {
+                            const key = `${r.source}:${r.externalId}`;
+                            const busy = linkingKey === key;
+                            const differs = r.match.status !== 'none' && r.match.differs;
+                            return (
+                              <div key={key} className="px-4 py-2 hover:bg-gray-50 flex items-center justify-between gap-2">
+                                <div
+                                  className={`min-w-0 flex-1 ${r.match.status !== 'none' ? 'cursor-pointer' : ''}`}
+                                  onClick={() => handleSelectMatched(r)}
+                                >
+                                  <div className="font-medium flex items-center gap-1.5">
+                                    <span className="truncate">{r.name}</span>
+                                    {r.match.status === 'linked' && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">เชื่อมแล้ว</span>
+                                    )}
+                                    {r.match.status === 'matched' && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">ตรงกับระบบ</span>
+                                    )}
+                                    {r.match.status === 'none' && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">จาก Tour</span>
+                                    )}
+                                    {differs && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">ข้อมูลต่าง</span>
+                                    )}
+                                    {r.source === 'booking' && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">Booking</span>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-gray-500 truncate">
+                                    {r.phone || r.email || '-'}
+                                  </div>
+                                </div>
+                                <div className="shrink-0">
+                                  {r.match.status === 'none' ? (
+                                    <Button type="button" size="sm" variant="outline" disabled={busy} className="text-xs h-7"
+                                      onClick={() => handleAddFromTour(r)}>
+                                      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Plus className="w-3 h-3 mr-1" />เพิ่ม</>}
+                                    </Button>
+                                  ) : differs ? (
+                                    <Button type="button" size="sm" variant="outline" disabled={busy} className="text-xs h-7 text-amber-700 border-amber-300"
+                                      onClick={() => handleUpdateFromTour(r)}>
+                                      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <><RefreshCw className="w-3 h-3 mr-1" />อัปเดต</>}
+                                    </Button>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                                      <Check className="w-3 h-3" /> ใช้ได้
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+
+                      {filteredCustomers.length === 0 && externalResults.length === 0 && !externalLoading && (
                         <div className="px-4 py-2 text-gray-500">ไม่พบลูกค้า</div>
                       )}
                     </div>

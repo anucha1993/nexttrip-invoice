@@ -328,7 +328,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
         <span className="ml-2">กำลังโหลดข้อมูล...</span>
       </div>
     );
@@ -362,7 +362,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-blue-600">แก้ไขใบแจ้งหนี้</h1>
+            <h1 className="text-2xl font-bold text-orange-600">แก้ไขใบแจ้งหนี้</h1>
             <p className="text-gray-500">{invoiceNumber}</p>
           </div>
         </div>

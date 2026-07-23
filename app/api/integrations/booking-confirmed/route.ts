@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import type { PoolConnection } from 'mariadb';
 import pool from '@/lib/db';
+import { phoneKey } from '@/lib/phone';
 
 // ---------------------------------------------------------------------------
 // Inbound webhook: tour-api calls this when a booking is CONFIRMED.
@@ -98,12 +99,14 @@ async function generateQuotationNumber(conn: PoolConnection): Promise<string> {
   return `${prefix}${next.toString().padStart(4, '0')}`;
 }
 
-/** Find an existing customer by email or phone, else create one. Returns customer id. */
+/** Find an existing customer by email or normalized phone, else create one.
+ *  New customers are linked back to the booking via (externalSource, externalId). */
 async function findOrCreateCustomer(
   conn: PoolConnection,
   customer: BookingPayload['customer'],
   source: string | null | undefined,
-  bookingCode: string
+  bookingCode: string,
+  bookingId?: number | string | null
 ): Promise<string> {
   const email = customer?.email?.trim() || null;
   const phone = customer?.phone?.trim() || null;
@@ -113,12 +116,23 @@ async function findOrCreateCustomer(
     phone ||
     `Booking ${bookingCode}`;
 
-  if (email || phone) {
+  // Match by email OR normalized phone so "08x..." and stored "66x..." collapse
+  // to the same customer instead of creating a duplicate.
+  const pKey = phoneKey(phone);
+  if (email || pKey) {
+    const where: string[] = [];
+    const params: string[] = [];
+    if (email) {
+      where.push('LOWER(email) = ?');
+      params.push(email.toLowerCase());
+    }
+    if (pKey) {
+      where.push(`REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '') LIKE ?`);
+      params.push(`%${pKey}`);
+    }
     const existing = await conn.query(
-      `SELECT id FROM customers
-       WHERE (? IS NOT NULL AND email = ?) OR (? IS NOT NULL AND phone = ?)
-       LIMIT 1`,
-      [email, email, phone, phone]
+      `SELECT id FROM customers WHERE ${where.join(' OR ')} LIMIT 1`,
+      params
     );
     if (existing.length > 0) return String(existing[0].id);
   }
@@ -126,10 +140,12 @@ async function findOrCreateCustomer(
   const id = generateCuid();
   const code = await generateCustomerCode(conn);
   const now = new Date();
+  const extId =
+    bookingId != null && Number.isInteger(Number(bookingId)) ? Number(bookingId) : null;
   await conn.query(
-    `INSERT INTO customers (id, code, name, email, phone, source, isActive, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, code, name, email, phone, source || 'booking', true, now, now]
+    `INSERT INTO customers (id, code, name, email, phone, source, externalId, externalSource, isActive, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, code, name, email, phone, source || 'booking', extId, extId ? 'booking' : null, true, now, now]
   );
   return id;
 }
@@ -261,7 +277,8 @@ export async function POST(request: NextRequest) {
       conn,
       payload.customer,
       payload.source,
-      bookingCode
+      bookingCode,
+      payload.bookingId
     );
     const quotationNumber = await generateQuotationNumber(conn);
 

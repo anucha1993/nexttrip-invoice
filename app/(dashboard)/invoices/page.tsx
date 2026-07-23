@@ -175,9 +175,9 @@ export default function InvoicesPage() {
       title: 'รายได้รวมทั้งหมด',
       value: `${formatCurrency(totalRevenue)} ฿`,
       icon: DollarSign,
-      color: 'from-blue-500 to-blue-600',
-      bgLight: 'bg-blue-50',
-      textColor: 'text-blue-600',
+      color: 'from-orange-500 to-orange-600',
+      bgLight: 'bg-orange-50',
+      textColor: 'text-orange-600',
       count: invoices.length,
       countLabel: 'ใบแจ้งหนี้',
     },
@@ -219,7 +219,7 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg shadow-blue-500/25">
+            <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg shadow-orange-500/25">
               <FileText className="w-6 h-6 text-white" />
             </div>
             ใบแจ้งหนี้
@@ -228,7 +228,7 @@ export default function InvoicesPage() {
         </div>
         <Button 
           onClick={() => router.push('/invoices/create')}
-          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25"
+          className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/25"
         >
           <Plus className="w-4 h-4 mr-2" />
           สร้างใบแจ้งหนี้

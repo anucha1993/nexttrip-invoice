@@ -85,6 +85,8 @@ model Customer {
   socialId     String?  // Social ID รองรับ emoji
   address      String?  @db.Text
   source       String?  // ที่มา: google, facebook, line, website, tiktok
+  externalId     Int?    // tour-api web_members.id or bookings.id (linked record)
+  externalSource String? // which tour-api entity externalId refers to: 'member' | 'booking'
   contactName  String?
   contactPhone String?
   notes        String?  @db.Text
@@ -95,6 +97,7 @@ model Customer {
   invoices   Invoice[]
   quotations Quotation[]
 
+  @@unique([externalSource, externalId], name: "uq_customer_external")
   @@map("customers")
 }
 

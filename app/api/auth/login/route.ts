@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
-import { query } from '@/lib/db-direct';
 import { setSession } from '@/lib/auth';
+import { resolveInvoiceSession, AccountDisabledError } from '@/lib/account-session';
 
 export const runtime = 'nodejs';
-
-function generateCuid() {
-  return 'c' + crypto.randomBytes(12).toString('hex');
-}
 
 /**
  * Login is delegated to tour-api (single identity source). On success we
@@ -62,77 +57,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unexpected auth response' }, { status: 502 });
     }
 
-    const externalId = Number(apiUser.id);
-    const accountEmail = String(apiUser.email);
-    const accountName = apiUser.name || accountEmail;
-    const role = apiUser.role || null;
-
-    // 2) Link/refresh the local account (identity from tour-api, permissions local).
-    const existing = await query(
-      `SELECT id, profileId, isActive FROM user_accounts WHERE externalId = ? OR email = ? LIMIT 1`,
-      [externalId, accountEmail]
-    );
-
-    let accountId: string;
-    let profileId: string | null;
-    let localActive = true;
-
-    if (existing.length > 0) {
-      accountId = existing[0].id;
-      profileId = existing[0].profileId ?? null;
-      localActive = !!existing[0].isActive;
-      await query(
-        `UPDATE user_accounts SET externalId = ?, email = ?, name = ?, role = ?, updatedAt = NOW() WHERE id = ?`,
-        [externalId, accountEmail, accountName, role, accountId]
-      );
-    } else {
-      // First login: allow in immediately with NO permissions until an admin
-      // assigns a profile.
-      accountId = generateCuid();
-      profileId = null;
-      await query(
-        `INSERT INTO user_accounts (id, externalId, email, name, role, profileId, isActive, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, NULL, 1, NOW(), NOW())`,
-        [accountId, externalId, accountEmail, accountName, role]
-      );
+    // 2) Link/refresh the local account and resolve permissions.
+    let payload;
+    try {
+      payload = await resolveInvoiceSession(apiUser);
+    } catch (e) {
+      if (e instanceof AccountDisabledError) {
+        return NextResponse.json({ error: 'Account is disabled' }, { status: 403 });
+      }
+      throw e;
     }
 
-    // 3) Invoice-side access gate (independent of tour-api).
-    if (!localActive) {
-      return NextResponse.json({ error: 'Account is disabled' }, { status: 403 });
-    }
-
-    // 4) Resolve permissions from the assigned profile (if any).
-    let profileCode: string | null = null;
-    let permissions: string[] = [];
-    if (profileId) {
-      const prof = await query(`SELECT code FROM profiles WHERE id = ? LIMIT 1`, [profileId]);
-      profileCode = prof.length > 0 ? prof[0].code : null;
-      const perms = await query(
-        `SELECT perm.code
-         FROM profile_permissions pp
-         JOIN permissions perm ON pp.permissionId = perm.id
-         WHERE pp.profileId = ?`,
-        [profileId]
-      );
-      permissions = perms.map((p: { code: string }) => p.code);
-    }
-
-    // 5) Issue the invoice session.
-    await setSession({
-      userId: accountId,
-      externalId,
-      email: accountEmail,
-      name: accountName,
-      role,
-      profileId,
-      profileCode,
-      permissions,
-    });
+    // 3) Issue the invoice session.
+    await setSession(payload);
 
     return NextResponse.json({
       success: true,
-      user: { id: accountId, email: accountEmail, name: accountName, role, profileCode },
+      user: {
+        id: payload.userId,
+        email: payload.email,
+        name: payload.name,
+        role: payload.role,
+        profileCode: payload.profileCode,
+      },
     });
   } catch (error) {
     console.error('Login error:', error);

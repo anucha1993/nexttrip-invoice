@@ -165,9 +165,9 @@ export default function TaxInvoicesPage() {
       title: 'จำนวนใบกำกับภาษี',
       value: `${filteredInvoices.length} รายการ`,
       icon: FileCheck,
-      color: 'from-purple-500 to-purple-600',
-      bgLight: 'bg-purple-50',
-      textColor: 'text-purple-600',
+      color: 'from-orange-500 to-orange-600',
+      bgLight: 'bg-orange-50',
+      textColor: 'text-orange-600',
     },
     {
       title: 'ยอดรวมทั้งหมด',
@@ -193,7 +193,7 @@ export default function TaxInvoicesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg shadow-purple-500/25">
+            <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg shadow-orange-500/25">
               <FileCheck className="w-6 h-6 text-white" />
             </div>
             ใบกำกับภาษี
@@ -202,7 +202,7 @@ export default function TaxInvoicesPage() {
         </div>
         <Button 
           onClick={() => router.push('/tax-invoices/create')}
-          className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-lg shadow-purple-500/25"
+          className="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white shadow-lg shadow-orange-500/25"
         >
           <FileCheck className="w-4 h-4 mr-2" />
           ออกใบกำกับภาษี

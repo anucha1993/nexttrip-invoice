@@ -155,6 +155,15 @@ export interface TourPeriodOption {
   price4: number;
 }
 
+/** A person found in tour-api (a web member or a guest booking contact). */
+export interface TourCustomerResult {
+  source: 'member' | 'booking';
+  externalId: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Raw tour-api response shapes (minimal)
 // ---------------------------------------------------------------------------
@@ -277,6 +286,35 @@ export async function fetchSale(id: number): Promise<SaleOption | null> {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Customers (person identity — web members + guest bookings)
+// ---------------------------------------------------------------------------
+
+/**
+ * Unified customer search against tour-api (web_members + guest bookings).
+ * Used by the invoice quotation flow so a sale can pull an existing tour
+ * customer instead of retyping. Returns [] on empty/short queries.
+ */
+export async function searchTourCustomers(q: string): Promise<TourCustomerResult[]> {
+  const query = (q ?? '').trim();
+  if (query.length < 2) return [];
+
+  const json = await tourApiGet<Paginated<Record<string, unknown>>>(
+    'integrations/customers/search',
+    { q: query }
+  );
+
+  return (json.data ?? [])
+    .map((r) => ({
+      source: r.source === 'booking' ? ('booking' as const) : ('member' as const),
+      externalId: toNum(r.externalId),
+      name: String(r.name ?? '').trim(),
+      email: (r.email as string) || null,
+      phone: (r.phone as string) || null,
+    }))
+    .filter((r) => r.externalId > 0 && r.name !== '');
 }
 
 // ---------------------------------------------------------------------------
