@@ -145,7 +145,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   return (
     <aside 
       className={`
-        fixed left-0 top-0 z-40 h-screen bg-gradient-to-b from-orange-500 via-orange-600 to-red-800 border-r border-orange-700 
+        fixed left-0 top-0 z-40 h-screen bg-white border-r border-gray-200 
         transition-transform duration-300 ease-in-out
         ${collapsed ? 'w-16' : 'w-64'}
       `}
@@ -154,20 +154,20 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       }}
     >
       {/* Logo */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-white/15">
+      <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
         {!collapsed && (
           <Link href="/" className="flex items-center gap-2" onClick={handleLinkClick}>
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-              <span className="text-orange-600 font-bold text-sm">NT</span>
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">NT</span>
             </div>
-            <span className="font-semibold text-white">NextTrip</span>
+            <span className="font-semibold text-gray-900">NextTrip</span>
           </Link>
         )}
         
         {/* Close button for mobile */}
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg text-orange-100 hover:text-white hover:bg-white/10 transition-colors lg:hidden"
+          className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors lg:hidden"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -175,7 +175,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         {/* Collapse button for desktop */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg text-orange-100 hover:text-white hover:bg-white/10 transition-colors hidden lg:block"
+          className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors hidden lg:block"
         >
           {collapsed ? (
             <ChevronRight className="w-5 h-5" />
@@ -200,8 +200,8 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                   onClick={() => !collapsed && toggleSubmenu(item.label)}
                   className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg transition-colors ${
                     isActive
-                      ? 'bg-white text-orange-600 shadow-sm'
-                      : 'text-orange-50 hover:bg-white/10 hover:text-white'
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -221,8 +221,8 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                   href={item.href || '#'}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                     isActive
-                      ? 'bg-white text-orange-600 shadow-sm'
-                      : 'text-orange-50 hover:bg-white/10 hover:text-white'
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <item.icon className="w-5 h-5 flex-shrink-0" />
@@ -232,7 +232,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
               {/* Sub Menu Items */}
               {hasSubItems && !collapsed && isExpanded && (
-                <div className="ml-4 mt-1 space-y-1 border-l-2 border-white/20 pl-3">
+                <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-3">
                   {item.subItems?.map((subItem) => {
                     const isSubActive = pathname === subItem.href || pathname?.startsWith(subItem.href + '/');
                     return (
@@ -242,8 +242,8 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                         onClick={handleLinkClick}
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                           isSubActive
-                            ? 'bg-white text-orange-600 font-medium'
-                            : 'text-orange-100 hover:bg-white/10 hover:text-white'
+                            ? 'bg-blue-50 text-blue-600 font-medium'
+                            : 'text-gray-600 hover:bg-gray-100'
                         }`}
                       >
                         {subItem.icon && <subItem.icon className="w-4 h-4" />}
@@ -259,9 +259,9 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       </nav>
 
       {/* Logout */}
-      <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-white/15 bg-transparent">
+      <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-200 bg-white">
         <button
-          className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-orange-50 hover:bg-white/10 hover:text-white transition-colors`}
+          className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors`}
         >
           <LogOut className="w-5 h-5 flex-shrink-0" />
           {!collapsed && <span className="font-medium">ออกจากระบบ</span>}

@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation';
 import { 
   Search, Filter, Download, Eye, MoreVertical, 
   FileCheck, CheckCircle, DollarSign, 
-  Loader2, Printer, XCircle 
+  Printer, XCircle 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { SkeletonTableRows } from '@/components/ui/skeleton';
 
 interface TaxInvoiceData {
   id: number;
@@ -165,9 +166,9 @@ export default function TaxInvoicesPage() {
       title: 'จำนวนใบกำกับภาษี',
       value: `${filteredInvoices.length} รายการ`,
       icon: FileCheck,
-      color: 'from-orange-500 to-orange-600',
-      bgLight: 'bg-orange-50',
-      textColor: 'text-orange-600',
+      color: 'from-purple-500 to-purple-600',
+      bgLight: 'bg-purple-50',
+      textColor: 'text-purple-600',
     },
     {
       title: 'ยอดรวมทั้งหมด',
@@ -193,7 +194,7 @@ export default function TaxInvoicesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg shadow-orange-500/25">
+            <div className="p-2 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg shadow-purple-500/25">
               <FileCheck className="w-6 h-6 text-white" />
             </div>
             ใบกำกับภาษี
@@ -202,7 +203,7 @@ export default function TaxInvoicesPage() {
         </div>
         <Button 
           onClick={() => router.push('/tax-invoices/create')}
-          className="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white shadow-lg shadow-orange-500/25"
+          className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-lg shadow-purple-500/25"
         >
           <FileCheck className="w-4 h-4 mr-2" />
           ออกใบกำกับภาษี
@@ -210,19 +211,19 @@ export default function TaxInvoicesPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
         {summaryCards.map((card, index) => {
           const Icon = card.icon;
           return (
-            <Card key={index} className="relative overflow-hidden border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${card.color} opacity-10 rounded-full -mr-16 -mt-16`} />
+            <Card key={index} className="hover-lift group relative overflow-hidden border-0 shadow-lg">
+              <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${card.color} opacity-10 rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-150`} />
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">{card.title}</p>
                     <p className={`text-2xl font-bold mt-2 ${card.textColor}`}>{card.value}</p>
                   </div>
-                  <div className={`p-3 rounded-xl ${card.bgLight}`}>
+                  <div className={`p-3 rounded-xl ${card.bgLight} transition-transform duration-300 group-hover:scale-110`}>
                     <Icon className={`w-6 h-6 ${card.textColor}`} />
                   </div>
                 </div>
@@ -305,12 +306,9 @@ export default function TaxInvoicesPage() {
       <Card className="border-0 shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-              <span className="ml-2 text-gray-500">กำลังโหลดข้อมูล...</span>
-            </div>
+            <SkeletonTableRows rows={6} cols={6} />
           ) : filteredInvoices.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-gray-500 animate-fade-in">
               <FileCheck className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p className="font-medium">ไม่พบข้อมูลใบกำกับภาษี</p>
               <p className="text-sm mt-1">ยังไม่มีใบกำกับภาษีในระบบ</p>

@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Filter, Download, Eye, Edit, Trash2, MoreVertical, FileText, Clock, AlertCircle, CheckCircle, DollarSign, Loader2 } from 'lucide-react';
+import { Plus, Search, Filter, Download, Eye, Edit, Trash2, MoreVertical, FileText, Clock, AlertCircle, CheckCircle, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Select } from '@/components/ui/select';
+import { SkeletonTableRows } from '@/components/ui/skeleton';
 
 interface InvoiceData {
   id: number;
@@ -175,9 +176,9 @@ export default function InvoicesPage() {
       title: 'รายได้รวมทั้งหมด',
       value: `${formatCurrency(totalRevenue)} ฿`,
       icon: DollarSign,
-      color: 'from-orange-500 to-orange-600',
-      bgLight: 'bg-orange-50',
-      textColor: 'text-orange-600',
+      color: 'from-blue-500 to-blue-600',
+      bgLight: 'bg-blue-50',
+      textColor: 'text-blue-600',
       count: invoices.length,
       countLabel: 'ใบแจ้งหนี้',
     },
@@ -219,7 +220,7 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg shadow-orange-500/25">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg shadow-blue-500/25">
               <FileText className="w-6 h-6 text-white" />
             </div>
             ใบแจ้งหนี้
@@ -228,7 +229,7 @@ export default function InvoicesPage() {
         </div>
         <Button 
           onClick={() => router.push('/invoices/create')}
-          className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/25"
+          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25"
         >
           <Plus className="w-4 h-4 mr-2" />
           สร้างใบแจ้งหนี้
@@ -236,12 +237,12 @@ export default function InvoicesPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
         {summaryCards.map((card, index) => {
           const Icon = card.icon;
           return (
-            <Card key={index} className="relative overflow-hidden border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${card.color} opacity-10 rounded-full -mr-16 -mt-16`} />
+            <Card key={index} className="hover-lift group relative overflow-hidden border-0 shadow-lg">
+              <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${card.color} opacity-10 rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-150`} />
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div>
@@ -249,7 +250,7 @@ export default function InvoicesPage() {
                     <p className={`text-2xl font-bold mt-2 ${card.textColor}`}>{card.value}</p>
                     <p className="text-xs text-gray-400 mt-1">{card.count} {card.countLabel}</p>
                   </div>
-                  <div className={`p-3 rounded-xl ${card.bgLight}`}>
+                  <div className={`p-3 rounded-xl ${card.bgLight} transition-transform duration-300 group-hover:scale-110`}>
                     <Icon className={`w-6 h-6 ${card.textColor}`} />
                   </div>
                 </div>
@@ -367,12 +368,9 @@ export default function InvoicesPage() {
       <Card className="border-0 shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-              <span className="ml-2 text-gray-500">กำลังโหลดข้อมูล...</span>
-            </div>
+            <SkeletonTableRows rows={6} cols={7} />
           ) : filteredInvoices.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-gray-500 animate-fade-in">
               <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p className="font-medium">ไม่พบข้อมูลใบแจ้งหนี้</p>
               <p className="text-sm mt-1">ยังไม่มีใบแจ้งหนี้ในระบบ</p>

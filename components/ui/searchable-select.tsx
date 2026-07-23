@@ -83,8 +83,8 @@ export function SearchableSelect({
         className={`
           flex items-center justify-between w-full px-3 py-2 text-sm 
           border rounded-md bg-white cursor-pointer
-          ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-orange-400'}
-          ${isOpen ? 'border-orange-500 ring-1 ring-orange-500' : 'border-gray-300'}
+          ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-blue-400'}
+          ${isOpen ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300'}
         `}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >

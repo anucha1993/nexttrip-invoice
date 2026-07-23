@@ -1078,7 +1078,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-orange-500">
+          <h1 className="text-2xl font-bold text-blue-500">
             {mode === 'create' ? 'สร้างใบเสนอราคา' : 'แก้ไขใบเสนอราคา'}
           </h1>
           <p className="text-gray-600">
