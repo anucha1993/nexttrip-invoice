@@ -5,6 +5,25 @@ import { resolveInvoiceSession, AccountDisabledError } from '@/lib/account-sessi
 export const runtime = 'nodejs';
 
 /**
+ * Resolve the app's PUBLIC origin from proxy headers. Behind Plesk/nginx the
+ * Node server binds to 0.0.0.0:3002, and `request.nextUrl.origin` can report
+ * that internal address — which the browser cannot reach. Prefer the forwarded
+ * Host/Proto (falling back to the raw Host header, then nextUrl.origin in dev).
+ */
+function publicOrigin(request: NextRequest): string {
+  const host = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '')
+    .split(',')[0]
+    .trim();
+  if (!host || host.startsWith('0.0.0.0')) {
+    return request.nextUrl.origin;
+  }
+  const proto =
+    (request.headers.get('x-forwarded-proto') || '').split(',')[0].trim() ||
+    (host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https');
+  return `${proto}://${host}`;
+}
+
+/**
  * SSO handoff from tour-backend (admin CRM). The admin posts its tour-api
  * Sanctum bearer token here; we verify it against tour-api (the shared identity
  * source), then link/refresh the local account and issue the invoice session
@@ -15,7 +34,7 @@ export const runtime = 'nodejs';
  * is a fixed internal path (no open-redirect from user input).
  */
 export async function POST(request: NextRequest) {
-  const origin = request.nextUrl.origin;
+  const origin = publicOrigin(request);
   const fail = (reason: string) =>
     NextResponse.redirect(new URL(`/login?error=${reason}`, origin), 303);
 
