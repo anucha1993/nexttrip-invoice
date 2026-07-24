@@ -892,8 +892,8 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
   };
 
   const docTypes = [
-    { id: 'invoice', label: 'ใบแจ้งหนี้', icon: FileText, color: 'blue' },
-    { id: 'taxInvoice', label: 'ใบกำกับภาษี', icon: FileCheck, color: 'purple' },
+    { id: 'invoice', label: 'ใบแจ้งหนี้', icon: FileText, activeText: 'text-blue-700' },
+    { id: 'taxInvoice', label: 'ใบกำกับภาษี', icon: FileCheck, activeText: 'text-purple-700' },
   ];
 
   // Fetch invoices for this quotation
@@ -971,8 +971,8 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 stagger-children">
+        <Card className="hover-lift border-t-2 border-t-blue-500">
           <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
               <p className="text-xs sm:text-sm text-gray-600 mb-1">ยอดรวมทั้งหมด</p>
@@ -980,7 +980,7 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover-lift border-t-2 border-t-purple-500">
           <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
               <p className="text-xs sm:text-sm text-gray-600 mb-1">ออกใบแจ้งหนี้แล้ว</p>
@@ -988,7 +988,7 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover-lift border-t-2 border-t-green-500">
           <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
               <p className="text-xs sm:text-sm text-gray-600 mb-1">ชำระเงินแล้ว</p>
@@ -996,7 +996,7 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover-lift border-t-2 border-t-orange-500">
           <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
               <p className="text-xs sm:text-sm text-gray-600 mb-1">ค้างชำระ</p>
@@ -1007,21 +1007,22 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
       </div>
 
       {/* Document Type Sub-tabs */}
-      <div className="flex gap-1 sm:gap-2 border-b pb-2 border-gray-300 overflow-x-auto">
+      <div className="inline-flex gap-1 p-1 bg-gray-100 rounded-xl overflow-x-auto">
         {docTypes.map((doc) => {
           const Icon = doc.icon;
+          const isActive = activeDocType === doc.id;
           return (
             <button
               key={doc.id}
               onClick={() => setActiveDocType(doc.id as any)}
-              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-t-lg font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                activeDocType === doc.id
-                  ? `bg-${doc.color}-50 text-${doc.color}-700 border-b-2 border-${doc.color}-500`
-                  : 'text-gray-600 hover:bg-gray-100'
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm transition-all whitespace-nowrap ${
+                isActive
+                  ? `bg-white shadow-sm ${doc.activeText}`
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               <Icon className="w-4 h-4" />
-              <span className="hidden xs:inline sm:inline">{doc.label}</span>
+              <span>{doc.label}</span>
             </button>
           );
         })}
