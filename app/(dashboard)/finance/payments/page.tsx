@@ -49,6 +49,10 @@ interface Transaction {
   referenceNumber: string | null;
   notes: string | null;
   createdAt: string;
+  bankAccountId: number | null;
+  chequeNumber: string | null;
+  chequeDate: string | null;
+  chequeBankId: number | null;
 }
 
 interface GroupedData {
@@ -182,6 +186,8 @@ export default function PaymentsPage() {
     setEditingTransaction(tx);
     // Format datetime for datetime-local input
     const paymentDate = tx.paymentDate ? new Date(tx.paymentDate).toISOString().slice(0, 16) : '';
+    // Format chequeDate for date input
+    const chequeDate = tx.chequeDate ? new Date(tx.chequeDate).toISOString().slice(0, 10) : '';
     setEditFormData({
       amount: tx.amount.toString(),
       paymentMethod: tx.paymentMethod,
@@ -189,10 +195,10 @@ export default function PaymentsPage() {
       referenceNumber: tx.referenceNumber || '',
       notes: tx.notes || '',
       refundReason: '',
-      bankAccountId: '',
-      chequeNumber: '',
-      chequeDate: '',
-      chequeBankId: '',
+      bankAccountId: tx.bankAccountId ? tx.bankAccountId.toString() : '',
+      chequeNumber: tx.chequeNumber || '',
+      chequeDate: chequeDate,
+      chequeBankId: tx.chequeBankId ? tx.chequeBankId.toString() : '',
     });
     setEditModalOpen(true);
   };
