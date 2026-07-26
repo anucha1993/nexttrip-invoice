@@ -8,7 +8,7 @@ export async function GET() {
   try {
     // ✅ Check authentication and permission
     const session = await requireAuth();
-    requirePermission(session, 'VIEW_PROFILES');
+    requirePermission(session, 'profile.view');
     
     conn = await pool.getConnection();
     
@@ -32,7 +32,7 @@ export async function GET() {
       
       // Get user count
       const userCount = await conn.query(`
-        SELECT COUNT(*) as count FROM users WHERE profileId = ?
+        SELECT COUNT(*) as count FROM user_accounts WHERE profileId = ?
       `, [profile.id]);
       profile._count = { users: Number(userCount[0].count) };
     }
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
   try {
     // ✅ Check authentication and permission
     const session = await requireAuth();
-    requirePermission(session, 'CREATE_PROFILE');
+    requirePermission(session, 'profile.create');
     const body = await request.json();
     const { code, name, description, isActive, permissionIds } = body;
 

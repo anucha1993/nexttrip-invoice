@@ -28,7 +28,7 @@ export async function GET(
     `, [id]);
 
     const users = await conn.query(`
-      SELECT id, name, email FROM users WHERE profileId = ?
+      SELECT id, name, email FROM user_accounts WHERE profileId = ?
     `, [id]);
 
     const profile = {
@@ -130,7 +130,7 @@ export async function DELETE(
     conn = await pool.getConnection();
 
     // Check if profile has users
-    const userCount = await conn.query('SELECT COUNT(*) as count FROM users WHERE profileId = ?', [id]);
+    const userCount = await conn.query('SELECT COUNT(*) as count FROM user_accounts WHERE profileId = ?', [id]);
     const count = Number(userCount[0].count);
 
     if (count > 0) {

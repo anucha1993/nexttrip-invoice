@@ -96,7 +96,7 @@ body {
 
 /* Focus visible for accessibility */
 *:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #3b82f6; /* blue-500 */
   outline-offset: 2px;
 }
 
@@ -112,5 +112,103 @@ body {
   .container-sm\:text-lg {
     font-size: 1.125rem;
     line-height: 1.75rem;
+  }
+}
+
+/* ==========================================================================
+   Motion & micro-interactions
+   ========================================================================== */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Staggered entrance for direct children (cards, list items) */
+.stagger-children > * {
+  animation: fade-in-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.04s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.08s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.12s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.16s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.20s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.24s; }
+.stagger-children > *:nth-child(7) { animation-delay: 0.28s; }
+.stagger-children > *:nth-child(8) { animation-delay: 0.32s; }
+
+/* Hover lift — subtle raise + shadow on hover */
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px -8px rgba(15, 23, 42, 0.18);
+}
+
+/* Skeleton shimmer loader */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #e9edf2;
+  border-radius: 0.5rem;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.65),
+    transparent
+  );
+  animation: shimmer 1.4s infinite;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-in-up,
+  .animate-scale-in,
+  .stagger-children > * {
+    animation: none !important;
+  }
+  .hover-lift {
+    transition: box-shadow 0.2s ease;
+  }
+  .hover-lift:hover {
+    transform: none;
+  }
+  .skeleton::after {
+    animation: none;
   }
 }

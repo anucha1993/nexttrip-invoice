@@ -1,14 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
-import mariadb from 'mariadb';
+import { dbConfig } from './db-config';
 
-// Create adapter with database config
+// Create adapter with database config (from .env)
 const adapter = new PrismaMariaDb({
-  host: '103.80.48.25',
-  port: 3306,
-  user: 'mailfore_nexttrip_invoice',
-  password: 'G2pvPm5acsB*o_z0',
-  database: 'nexttrip_invoice',
+  ...dbConfig,
   connectionLimit: 10,
 });
 

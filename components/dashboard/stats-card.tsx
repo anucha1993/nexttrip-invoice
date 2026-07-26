@@ -27,7 +27,7 @@ export function StatsCard({
   };
 
   return (
-    <Card className="p-6">
+    <Card className="hover-lift group p-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-500">{title}</p>
@@ -38,7 +38,7 @@ export function StatsCard({
             </p>
           )}
         </div>
-        <div className={`p-3 rounded-xl ${iconBgColor}`}>
+        <div className={`p-3 rounded-xl ${iconBgColor} transition-transform duration-300 group-hover:scale-110`}>
           <Icon className={`w-6 h-6 ${iconColor}`} />
         </div>
       </div>

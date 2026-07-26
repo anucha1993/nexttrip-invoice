@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { requireAuth, requirePermission } from '@/lib/api-auth';
 
@@ -8,20 +7,21 @@ function generateCuid() {
   return 'c' + randomBytes(12).toString('hex');
 }
 
-// GET - รายการ Users ทั้งหมด
+// GET - รายการ User Accounts ทั้งหมด
+// หมายเหตุ: ตัวตน (email/name) มาจาก tour-api; ที่นี่จัดการเฉพาะสิทธิ์ (profile) + สถานะ
 export async function GET() {
   let conn;
   try {
     // ✅ Check authentication and permission
     const session = await requireAuth();
-    requirePermission(session, 'VIEW_USERS');
+    requirePermission(session, 'user.view');
     
     conn = await pool.getConnection();
     
     const users = await conn.query(`
-      SELECT u.id, u.email, u.name, u.profileId, u.avatar, u.isActive, u.createdAt, u.updatedAt,
+      SELECT u.id, u.email, u.name, u.externalId, u.role, u.profileId, u.isActive, u.createdAt, u.updatedAt,
              p.id as profile_id, p.code as profile_code, p.name as profile_name
-      FROM users u
+      FROM user_accounts u
       LEFT JOIN profiles p ON u.profileId = p.id
       ORDER BY u.createdAt DESC
     `);
@@ -48,8 +48,9 @@ export async function GET() {
       id: u.id,
       email: u.email,
       name: u.name,
+      externalId: u.externalId,
+      role: u.role,
       profileId: u.profileId,
-      avatar: u.avatar,
       isActive: u.isActive,
       createdAt: u.createdAt,
       updatedAt: u.updatedAt,
@@ -73,22 +74,28 @@ export async function GET() {
   }
 }
 
-// POST - สร้าง User ใหม่
+// POST - ผูกบัญชี/กำหนดสิทธิ์ล่วงหน้า (pre-provision)
+// ไม่มีรหัสผ่าน: ตัวตนยืนยันผ่าน tour-api ตอน login; แถวนี้จะถูกเชื่อมด้วย email เมื่อผู้ใช้ล็อกอินครั้งแรก
 export async function POST(request: NextRequest) {
   let conn;
   try {
     const body = await request.json();
-    const { email, password, name, profileId, isActive } = body;
+    const { email, name, profileId, isActive } = body;
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (!email || !name) {
+      return NextResponse.json(
+        { error: 'กรุณากรอกอีเมลและชื่อ' },
+        { status: 400 }
+      );
+    }
+
     const id = generateCuid();
     const now = new Date();
 
     conn = await pool.getConnection();
 
     // Check if email exists
-    const existing = await conn.query('SELECT id FROM users WHERE email = ?', [email]);
+    const existing = await conn.query('SELECT id FROM user_accounts WHERE email = ?', [email]);
     if (existing.length > 0) {
       return NextResponse.json(
         { error: 'อีเมลนี้มีผู้ใช้งานแล้ว' },
@@ -97,15 +104,15 @@ export async function POST(request: NextRequest) {
     }
 
     await conn.query(`
-      INSERT INTO users (id, email, password, name, profileId, isActive, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, email, hashedPassword, name, profileId || null, isActive ?? true, now, now]);
+      INSERT INTO user_accounts (id, externalId, email, name, role, profileId, isActive, createdAt, updatedAt)
+      VALUES (?, NULL, ?, ?, NULL, ?, ?, ?, ?)
+    `, [id, email, name, profileId || null, isActive ?? true, now, now]);
 
-    // Get created user
+    // Get created account
     const users = await conn.query(`
-      SELECT u.id, u.email, u.name, u.profileId, u.avatar, u.isActive, u.createdAt, u.updatedAt,
+      SELECT u.id, u.email, u.name, u.externalId, u.role, u.profileId, u.isActive, u.createdAt, u.updatedAt,
              p.id as profile_id, p.code as profile_code, p.name as profile_name
-      FROM users u
+      FROM user_accounts u
       LEFT JOIN profiles p ON u.profileId = p.id
       WHERE u.id = ?
     `, [id]);
@@ -115,8 +122,9 @@ export async function POST(request: NextRequest) {
       id: user.id,
       email: user.email,
       name: user.name,
+      externalId: user.externalId,
+      role: user.role,
       profileId: user.profileId,
-      avatar: user.avatar,
       isActive: user.isActive,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

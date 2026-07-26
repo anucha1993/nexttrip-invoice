@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import bcrypt from 'bcryptjs';
 
-// GET - ดึงข้อมูล User ตาม ID
+// GET - ดึงข้อมูล User Account ตาม ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -13,9 +12,9 @@ export async function GET(
     conn = await pool.getConnection();
 
     const users = await conn.query(`
-      SELECT u.id, u.email, u.name, u.profileId, u.avatar, u.isActive, u.createdAt, u.updatedAt,
+      SELECT u.id, u.email, u.name, u.externalId, u.role, u.profileId, u.isActive, u.createdAt, u.updatedAt,
              p.id as profile_id, p.code as profile_code, p.name as profile_name, p.description as profile_description
-      FROM users u
+      FROM user_accounts u
       LEFT JOIN profiles p ON u.profileId = p.id
       WHERE u.id = ?
     `, [id]);
@@ -44,8 +43,9 @@ export async function GET(
       id: user.id,
       email: user.email,
       name: user.name,
+      externalId: user.externalId,
+      role: user.role,
       profileId: user.profileId,
-      avatar: user.avatar,
       isActive: user.isActive,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -70,7 +70,7 @@ export async function GET(
   }
 }
 
-// PUT - แก้ไข User
+// PUT - แก้ไข User Account (สิทธิ์/สถานะ/ชื่อ/อีเมล) — ไม่มีรหัสผ่าน (ตัวตนมาจาก tour-api)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -79,12 +79,12 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { email, password, name, profileId, isActive } = body;
+    const { email, name, profileId, isActive } = body;
 
     conn = await pool.getConnection();
 
-    // Check if email exists for other users
-    const existing = await conn.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]);
+    // Check if email exists for other accounts
+    const existing = await conn.query('SELECT id FROM user_accounts WHERE email = ? AND id != ?', [email, id]);
     if (existing.length > 0) {
       return NextResponse.json(
         { error: 'อีเมลนี้มีผู้ใช้งานแล้ว' },
@@ -94,24 +94,16 @@ export async function PUT(
 
     const now = new Date();
 
-    if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      await conn.query(`
-        UPDATE users SET email = ?, password = ?, name = ?, profileId = ?, isActive = ?, updatedAt = ?
-        WHERE id = ?
-      `, [email, hashedPassword, name, profileId || null, isActive, now, id]);
-    } else {
-      await conn.query(`
-        UPDATE users SET email = ?, name = ?, profileId = ?, isActive = ?, updatedAt = ?
-        WHERE id = ?
-      `, [email, name, profileId || null, isActive, now, id]);
-    }
+    await conn.query(`
+      UPDATE user_accounts SET email = ?, name = ?, profileId = ?, isActive = ?, updatedAt = ?
+      WHERE id = ?
+    `, [email, name, profileId || null, isActive, now, id]);
 
-    // Get updated user
+    // Get updated account
     const users = await conn.query(`
-      SELECT u.id, u.email, u.name, u.profileId, u.avatar, u.isActive, u.createdAt, u.updatedAt,
+      SELECT u.id, u.email, u.name, u.externalId, u.role, u.profileId, u.isActive, u.createdAt, u.updatedAt,
              p.id as profile_id, p.code as profile_code, p.name as profile_name
-      FROM users u
+      FROM user_accounts u
       LEFT JOIN profiles p ON u.profileId = p.id
       WHERE u.id = ?
     `, [id]);
@@ -121,8 +113,9 @@ export async function PUT(
       id: user.id,
       email: user.email,
       name: user.name,
+      externalId: user.externalId,
+      role: user.role,
       profileId: user.profileId,
-      avatar: user.avatar,
       isActive: user.isActive,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -145,7 +138,7 @@ export async function PUT(
   }
 }
 
-// DELETE - ลบ User
+// DELETE - ลบ User Account (ยกเลิกการเชื่อมสิทธิ์; ผู้ใช้ล็อกอินใหม่ได้ แต่สิทธิ์จะว่าง)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -155,7 +148,7 @@ export async function DELETE(
     const { id } = await params;
     conn = await pool.getConnection();
     
-    await conn.query('DELETE FROM users WHERE id = ?', [id]);
+    await conn.query('DELETE FROM user_accounts WHERE id = ?', [id]);
 
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error: any) {

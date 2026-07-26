@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
@@ -20,12 +20,10 @@ interface Profile {
 export default function CreateUserPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    password: '',
     profileId: '',
     isActive: true,
   });
@@ -56,10 +54,6 @@ export default function CreateUserPage() {
     const newErrors: Record<string, string> = {};
     if (!formData.name) newErrors.name = 'กรุณากรอกชื่อ';
     if (!formData.email) newErrors.email = 'กรุณากรอกอีเมล';
-    if (!formData.password) newErrors.password = 'กรุณากรอกรหัสผ่าน';
-    if (formData.password && formData.password.length < 6) {
-      newErrors.password = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
-    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -103,7 +97,7 @@ export default function CreateUserPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">เพิ่มผู้ใช้งาน</h1>
-          <p className="text-gray-500 mt-1">สร้างบัญชีผู้ใช้งานใหม่</p>
+          <p className="text-gray-500 mt-1">กำหนดสิทธิ์ให้ผู้ใช้ล่วงหน้า (ตัวตนจาก tour-api)</p>
         </div>
       </div>
 
@@ -128,23 +122,9 @@ export default function CreateUserPage() {
               error={errors.email}
               placeholder="example@email.com"
             />
-            <div className="relative">
-              <Input
-                label="รหัสผ่าน"
-                type={showPassword ? 'text' : 'password'}
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                error={errors.password}
-                placeholder="อย่างน้อย 6 ตัวอักษร"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
+            <p className="text-sm text-gray-500 -mt-2">
+              ตัวตนและรหัสผ่านจัดการที่ tour-api — ที่นี่กำหนดเฉพาะสิทธิ์การใช้งาน อีเมลต้องตรงกับบัญชี tour-api
+            </p>
             <div className="grid grid-cols-2 gap-4">
               <Select
                 label="โปรไฟล์สิทธิ์"

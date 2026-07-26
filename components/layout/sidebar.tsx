@@ -157,7 +157,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
         {!collapsed && (
           <Link href="/" className="flex items-center gap-2" onClick={handleLinkClick}>
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">NT</span>
             </div>
             <span className="font-semibold text-gray-900">NextTrip</span>
@@ -167,7 +167,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         {/* Close button for mobile */}
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors lg:hidden"
+          className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors lg:hidden"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -175,7 +175,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         {/* Collapse button for desktop */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors hidden lg:block"
+          className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors hidden lg:block"
         >
           {collapsed ? (
             <ChevronRight className="w-5 h-5" />
@@ -201,7 +201,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                   className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg transition-colors ${
                     isActive
                       ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -222,7 +222,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                     isActive
                       ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <item.icon className="w-5 h-5 flex-shrink-0" />
@@ -232,7 +232,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
               {/* Sub Menu Items */}
               {hasSubItems && !collapsed && isExpanded && (
-                <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-100 pl-3">
+                <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-3">
                   {item.subItems?.map((subItem) => {
                     const isSubActive = pathname === subItem.href || pathname?.startsWith(subItem.href + '/');
                     return (
@@ -243,7 +243,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                           isSubActive
                             ? 'bg-blue-50 text-blue-600 font-medium'
-                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                            : 'text-gray-600 hover:bg-gray-100'
                         }`}
                       >
                         {subItem.icon && <subItem.icon className="w-4 h-4" />}

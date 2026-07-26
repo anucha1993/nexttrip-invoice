@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     const checkTable = await conn.query(`
       SELECT TABLE_NAME 
       FROM information_schema.TABLES 
-      WHERE TABLE_SCHEMA = 'nexttrip_invoice' 
+      WHERE TABLE_SCHEMA = DATABASE() 
       AND TABLE_NAME = 'payment_links'
     `) as any[];
 

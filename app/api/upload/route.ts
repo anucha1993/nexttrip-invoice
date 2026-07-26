@@ -1,9 +1,11 @@
 // app/api/upload/route.ts
-// API สำหรับ Upload ไฟล์
+// API สำหรับ Upload ไฟล์ — เก็บบน Cloudflare (Images สำหรับรูป, R2 สำหรับไฟล์อื่น)
 
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import { uploadFile } from '@/lib/storage';
+
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,26 +41,25 @@ export async function POST(request: NextRequest) {
     // Generate unique filename
     const timestamp = Date.now();
     const randomStr = Math.random().toString(36).substring(2, 8);
-    const ext = path.extname(file.name) || '.jpg';
+    const ext = path.extname(file.name) || (file.type === 'application/pdf' ? '.pdf' : '.jpg');
     const filename = `${timestamp}_${randomStr}${ext}`;
 
-    // Create upload directory if not exists
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', folder);
-    await mkdir(uploadDir, { recursive: true });
-
-    // Save file
+    // Upload to Cloudflare (images -> Cloudflare Images, files -> R2); local disk if unconfigured
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const filePath = path.join(uploadDir, filename);
-    await writeFile(filePath, buffer);
+    const stored = await uploadFile({
+      buffer,
+      filename,
+      contentType: file.type,
+      folder,
+    });
 
-    // Return URL
-    const fileUrl = `/uploads/${folder}/${filename}`;
-
+    // Return URL (response shape unchanged; `storage` is extra/optional)
     return NextResponse.json({
       success: true,
-      url: fileUrl,
-      filename,
+      url: stored.url,
+      filename: stored.filename,
+      storage: stored.storage,
     });
 
   } catch (error: any) {

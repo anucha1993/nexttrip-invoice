@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { X, AlertCircle, CheckCircle, Info, FileText } from 'lucide-react';
 import { useCurrentUser } from '@/contexts/AuthContext';
 
 interface InvoiceModalProps {
@@ -78,6 +78,15 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
     fetchQuotationData();
     fetchNextInvoiceNumber();
   }, []);
+
+  // Close on Escape key
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const fetchQuotationData = async () => {
     try {
@@ -224,13 +233,21 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       
-      <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-scale-in">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">สร้างใบแจ้งหนี้</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+        <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-white backdrop-blur-sm">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">สร้างใบแจ้งหนี้</h2>
+              <p className="text-xs text-blue-100">{quotation.quotationNumber} · {quotation.customerName}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-white/80 hover:bg-white/15 hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -293,7 +310,10 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
 
           {/* Items from Quotation */}
           {loadingData ? (
-            <div className="text-center py-4 text-gray-500">กำลังโหลดข้อมูล...</div>
+            <div className="space-y-2">
+              <div className="skeleton h-4 w-48" />
+              <div className="skeleton h-28 w-full rounded-lg" />
+            </div>
           ) : quotationData?.items && quotationData.items.length > 0 && (
             <div>
               <h3 className="font-medium text-gray-900 mb-2">รายการสินค้า/บริการ (Copy จากใบเสนอราคา)</h3>
@@ -389,7 +409,7 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
                 value={invoiceDate}
                 onChange={(e) => setInvoiceDate(e.target.value)}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
             <div>
@@ -401,7 +421,7 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
@@ -417,7 +437,7 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
               step="0.01"
               value={depositAmount || ''}
               onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="0.00"
             />
             {depositAmount > 0 && quotationData && (
@@ -436,7 +456,7 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="หมายเหตุเพิ่มเติม..."
             />
           </div>
@@ -450,7 +470,7 @@ export default function InvoiceModal({ quotation, onClose, onSuccess }: InvoiceM
           )}
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t  border-gray-300">
+          <div className="sticky bottom-0 -mx-6 -mb-6 flex justify-end gap-3 border-t border-gray-200 bg-white/90 px-6 py-4 backdrop-blur-sm">
             <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               ยกเลิก
             </Button>

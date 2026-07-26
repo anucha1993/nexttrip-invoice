@@ -295,7 +295,7 @@ touch migrations/005_create_document_tables.sql
 #### Step 1.2: Run Migration
 ```bash
 # เชื่อมต่อ Database และ Run SQL
-mysql -h 103.80.48.25 -u mailfore_nexttrip_invoice -p nexttrip_invoice < migrations/005_create_document_tables.sql
+mysql -h 119.59.124.207 -u invoice_admin -p invoices < migrations/005_create_document_tables.sql
 ```
 
 #### Step 1.3: Verify Tables

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
 
 // POST - สร้างข้อมูลตัวอย่าง
 export async function POST() {
@@ -134,93 +133,14 @@ export async function POST() {
       },
     });
 
-    // สร้าง Users ตัวอย่าง
-    const usersData = [
-      {
-        email: 'admin@nexttrip.com',
-        password: 'admin123',
-        name: 'ผู้ดูแลระบบ',
-        profileId: adminProfile.id,
-        isActive: true,
-      },
-      {
-        email: 'manager@nexttrip.com',
-        password: 'manager123',
-        name: 'สมชาย จัดการ',
-        profileId: managerProfile.id,
-        isActive: true,
-      },
-      {
-        email: 'sales@nexttrip.com',
-        password: 'sales123',
-        name: 'สมหญิง ขายดี',
-        profileId: salesProfile.id,
-        isActive: true,
-      },
-    ];
-
-    const createdUsers = [];
-    for (const userData of usersData) {
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
-      
-      // Check if user exists
-      const existingUser = await prisma.user.findUnique({
-        where: { email: userData.email },
-      });
-
-      if (existingUser) {
-        // Update existing user
-        const user = await prisma.user.update({
-          where: { email: userData.email },
-          data: {
-            password: hashedPassword,
-            name: userData.name,
-            profileId: userData.profileId,
-            isActive: userData.isActive,
-          },
-          include: {
-            profile: {
-              include: {
-                permissions: {
-                  include: {
-                    permission: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-        createdUsers.push(user);
-      } else {
-        // Create new user
-        const user = await prisma.user.create({
-          data: {
-            email: userData.email,
-            password: hashedPassword,
-            name: userData.name,
-            profileId: userData.profileId,
-            isActive: userData.isActive,
-          },
-          include: {
-            profile: {
-              include: {
-                permissions: {
-                  include: {
-                    permission: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-        createdUsers.push(user);
-      }
-    }
+    // หมายเหตุ: ไม่ seed ผู้ใช้ที่นี่แล้ว — ตัวตน (identity) มาจาก tour-api
+    // และบัญชี user_accounts จะถูกสร้าง/ผูกอัตโนมัติเมื่อผู้ใช้ล็อกอินครั้งแรก
+    // จากนั้นแอดมินจึงกำหนดโปรไฟล์สิทธิ์ให้ภายหลัง
 
     return NextResponse.json({
       message: 'Seed completed successfully',
       permissions: allPermissions.length,
-      users: createdUsers.length,
+      profiles: [adminProfile.code, managerProfile.code, salesProfile.code],
     });
   } catch (error) {
     console.error('Error seeding data:', error);
