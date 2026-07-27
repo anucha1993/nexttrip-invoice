@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { generateDocumentNumber } from '@/lib/helpers/document-number';
 import { LineOaService } from '@/lib/services/line-oa';
+import { getSlipUsage, formatSlipUsageList } from '@/lib/helpers/slip-usage';
 
 // GET /api/customer-transactions - List transactions
 export async function GET(request: NextRequest) {
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
     const serializedTransactions = transactions.map((t: any) => ({
       ...t,
       id: Number(t.id),
-      invoiceId: Number(t.invoiceId),
+      invoiceId: t.invoiceId != null ? Number(t.invoiceId) : null,
       quotationId: Number(t.quotationId),
       amount: parseFloat(t.amount) || 0,
       invoiceTotal: parseFloat(t.invoiceTotal) || 0,
@@ -121,6 +122,7 @@ export async function POST(request: NextRequest) {
     const {
       transactionType,  // 'PAYMENT' or 'REFUND'
       invoiceId,
+      quotationId: bodyQuotationId,  // ใช้เมื่อบันทึกรับเงินโดยอ้างอิง QT ตรง ๆ โดยไม่ต้องมีใบแจ้งหนี้
       amount: rawAmount,
       paymentMethod,
       paymentDate,
@@ -174,9 +176,9 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    if (!invoiceId) {
+    if (!invoiceId && !bodyQuotationId) {
       return NextResponse.json(
-        { error: 'กรุณาระบุ invoiceId' },
+        { error: 'กรุณาระบุ invoiceId หรือ quotationId' },
         { status: 400 }
       );
     }
@@ -188,31 +190,93 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Get invoice info
-    const invoices = await connection.query(
-      `SELECT i.id, i.invoiceNumber, i.grandTotal, i.paidAmount, i.refundedAmount, 
-              i.quotationId, i.status,
-              q.quotationNumber, c.name as customerName
-       FROM invoices i 
-       LEFT JOIN quotations q ON i.quotationId = q.id
-       LEFT JOIN customers c ON q.customerId = c.id
-       WHERE i.id = ?`,
-      [invoiceId]
-    );
-    
-    if (!invoices || invoices.length === 0) {
-      return NextResponse.json(
-        { error: 'ไม่พบใบแจ้งหนี้' },
-        { status: 404 }
+    // ค่าที่จะใช้จริงในการบันทึก: ถ้ามี invoiceId ให้ผูกกับใบแจ้งหนี้ตามปกติ
+    // ถ้าไม่มี invoiceId (ระบุแค่ quotationId) คือ "บันทึกรับเงินตรงกับ QT" ไม่ต้องมีใบแจ้งหนี้
+    const finalInvoiceId: number | null = invoiceId || null;
+    let invoice: {
+      invoiceNumber: string | null;
+      grandTotal: number;
+      paidAmount: number;
+      refundedAmount: number;
+      quotationNumber: string | null;
+      customerName: string | null;
+    };
+    let quotationId: number;
+
+    if (finalInvoiceId) {
+      // Get invoice info
+      const invoices = await connection.query(
+        `SELECT i.id, i.invoiceNumber, i.grandTotal, i.paidAmount, i.refundedAmount, 
+                i.quotationId, i.status,
+                q.quotationNumber, c.name as customerName
+         FROM invoices i 
+         LEFT JOIN quotations q ON i.quotationId = q.id
+         LEFT JOIN customers c ON q.customerId = c.id
+         WHERE i.id = ?`,
+        [finalInvoiceId]
       );
+
+      if (!invoices || invoices.length === 0) {
+        return NextResponse.json(
+          { error: 'ไม่พบใบแจ้งหนี้' },
+          { status: 404 }
+        );
+      }
+
+      const inv = invoices[0];
+      quotationId = inv.quotationId;
+      invoice = {
+        invoiceNumber: inv.invoiceNumber,
+        grandTotal: parseFloat(inv.grandTotal),
+        paidAmount: parseFloat(inv.paidAmount || 0),
+        refundedAmount: parseFloat(inv.refundedAmount || 0),
+        quotationNumber: inv.quotationNumber,
+        customerName: inv.customerName,
+      };
+    } else {
+      // บันทึกรับเงินโดยอ้างอิง QT ตรง ๆ ไม่ต้องมีใบแจ้งหนี้
+      const quotations = await connection.query(
+        `SELECT q.id, q.quotationNumber, q.grandTotal, c.name as customerName
+         FROM quotations q
+         LEFT JOIN customers c ON q.customerId = c.id
+         WHERE q.id = ?`,
+        [bodyQuotationId]
+      );
+
+      if (!quotations || quotations.length === 0) {
+        return NextResponse.json(
+          { error: 'ไม่พบใบเสนอราคา' },
+          { status: 404 }
+        );
+      }
+
+      const q = quotations[0];
+      quotationId = q.id;
+
+      // ยอดชำระ/คืนเงินของ QT นี้ต้องคำนวณจาก customer_transactions ที่ยืนยันแล้วทั้งหมด
+      // (เหมือนที่ /api/quotations/[id] ใช้คำนวณ paymentStatus) เพราะตาราง quotations ไม่มีคอลัมน์ paidAmount/refundedAmount เก็บเอง
+      const paymentAgg = await connection.query(
+        `SELECT 
+           COALESCE(SUM(CASE WHEN transactionType = 'PAYMENT' AND status = 'CONFIRMED' THEN amount ELSE 0 END), 0) as totalPaid,
+           COALESCE(SUM(CASE WHEN transactionType = 'REFUND' AND status = 'CONFIRMED' THEN amount ELSE 0 END), 0) as totalRefunded
+         FROM customer_transactions
+         WHERE quotationId = ?`,
+        [q.id]
+      );
+
+      invoice = {
+        invoiceNumber: null,
+        grandTotal: parseFloat(q.grandTotal),
+        paidAmount: parseFloat(paymentAgg[0]?.totalPaid || 0),
+        refundedAmount: parseFloat(paymentAgg[0]?.totalRefunded || 0),
+        quotationNumber: q.quotationNumber,
+        customerName: q.customerName,
+      };
     }
-    
-    const invoice = invoices[0];
-    const quotationId = invoice.quotationId;
-    
+
     // Validate amount for PAYMENT
     if (transactionType === 'PAYMENT') {
-      const balanceAmount = parseFloat(invoice.grandTotal) - parseFloat(invoice.paidAmount || 0) + parseFloat(invoice.refundedAmount || 0);
+      const balanceAmount = invoice.grandTotal - invoice.paidAmount + invoice.refundedAmount;
       if (amount > balanceAmount) {
         return NextResponse.json(
           { error: `ยอดชำระเกินยอดคงเหลือ (คงเหลือ: ${balanceAmount.toLocaleString()} บาท)` },
@@ -223,7 +287,7 @@ export async function POST(request: NextRequest) {
     
     // Validate amount for REFUND
     if (transactionType === 'REFUND') {
-      const paidAmount = parseFloat(invoice.paidAmount || 0) - parseFloat(invoice.refundedAmount || 0);
+      const paidAmount = invoice.paidAmount - invoice.refundedAmount;
       if (amount > paidAmount) {
         return NextResponse.json(
           { error: `ยอดคืนเงินเกินยอดที่ชำระ (ชำระแล้ว: ${paidAmount.toLocaleString()} บาท)` },
@@ -239,7 +303,15 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Ref (เลขที่อ้างอิง) จำเป็นสำหรับการรับเงินผ่านโอนเงิน และห้ามซ้ำกับรายการอื่นเด็ดขาด
+    // Ref (เลขที่อ้างอิง) จำเป็นสำหรับการรับเงินผ่านโอนเงิน
+    // เก็บข้อมูลไว้แจ้งเตือน LINE OA ทีหลัง (หลัง commit) ถ้าตรวจพบว่าสลิปนี้ถูกใช้ซ้ำกับรายการอื่นมาก่อน
+    let slipReuseInfo: {
+      totalAmount: number | null;
+      usedAmountBefore: number;
+      remainingAfter: number;
+      usages: Awaited<ReturnType<typeof getSlipUsage>>['usages'];
+    } | null = null;
+
     if (transactionType === 'PAYMENT' && (paymentMethod || 'TRANSFER') === 'TRANSFER') {
       if (!finalReferenceNumber) {
         return NextResponse.json(
@@ -247,15 +319,51 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      const dupRef = await connection.query(
-        `SELECT id, transactionNumber FROM customer_transactions WHERE referenceNumber = ? AND status != 'CANCELLED' LIMIT 1`,
-        [finalReferenceNumber]
-      );
-      if (dupRef?.[0]) {
-        return NextResponse.json(
-          { error: `เลขที่อ้างอิง (Ref) "${finalReferenceNumber}" ถูกใช้ไปแล้ว (รายการ ${dupRef[0].transactionNumber})` },
-          { status: 409 }
+
+      // ยอดเงินจริงในสลิป (ถ้ามีผลตรวจสอบผ่าน Slip2Go แนบมา) — ใช้เป็นเพดานให้ "สลิปใบเดียวกัน"
+      // แบ่งไปใช้ชำระได้หลายใบแจ้งหนี้/QT ตราบไม่เกินยอดนี้ แทนที่จะห้ามใช้ Ref ซ้ำเด็ดขาด
+      const slipTotalAmount = sd && typeof sd.amount === 'number' ? sd.amount : null;
+
+      if (slipTotalAmount != null) {
+        const { usedAmount, usages } = await getSlipUsage(connection, {
+          slipRef: finalReferenceNumber,
+          referenceNumber: finalReferenceNumber,
+        });
+        const remainingAmount = Math.round((slipTotalAmount - usedAmount) * 100) / 100;
+        if (amount > remainingAmount + 0.01) {
+          return NextResponse.json(
+            {
+              error:
+                usages.length > 0
+                  ? `สลิปนี้ใช้ได้อีกแค่ ${remainingAmount.toLocaleString('th-TH')} บาท (ยอดสลิปรวม ${slipTotalAmount.toLocaleString('th-TH')} บาท เคยใช้กับ: ${formatSlipUsageList(usages)})`
+                  : `ยอดเงินเกินยอดสลิป (ยอดสลิป ${slipTotalAmount.toLocaleString('th-TH')} บาท)`,
+              usage: { totalAmount: slipTotalAmount, usedAmount, remainingAmount, usages },
+            },
+            { status: 409 }
+          );
+        }
+
+        // สลิปนี้เคยถูกใช้แนบกับรายการอื่นมาก่อนแล้ว (แบ่งชำระหลายใบแจ้งหนี้) — เก็บไว้แจ้งเตือน LINE OA หลัง commit
+        if (usages.length > 0) {
+          slipReuseInfo = {
+            totalAmount: slipTotalAmount,
+            usedAmountBefore: usedAmount,
+            remainingAfter: Math.round((remainingAmount - amount) * 100) / 100,
+            usages,
+          };
+        }
+      } else {
+        // ไม่มีผลตรวจสอบสลิปแนบมา (กรอก Ref ด้วยมือ) — ไม่ทราบยอดสลิปจริง คงพฤติกรรมเดิม ห้ามใช้ Ref ซ้ำเด็ดขาด
+        const dupRef = await connection.query(
+          `SELECT id, transactionNumber FROM customer_transactions WHERE referenceNumber = ? AND status != 'CANCELLED' LIMIT 1`,
+          [finalReferenceNumber]
         );
+        if (dupRef?.[0]) {
+          return NextResponse.json(
+            { error: `เลขที่อ้างอิง (Ref) "${finalReferenceNumber}" ถูกใช้ไปแล้ว (รายการ ${dupRef[0].transactionNumber})` },
+            { status: 409 }
+          );
+        }
       }
     }
     
@@ -283,7 +391,7 @@ export async function POST(request: NextRequest) {
       [
         transactionNumber,
         transactionType,
-        invoiceId,
+        finalInvoiceId,
         quotationId,
         amount,
         paymentMethod || 'TRANSFER',
@@ -332,7 +440,7 @@ export async function POST(request: NextRequest) {
           [
             receiptNumber,
             transactionId,
-            invoiceId,
+            finalInvoiceId,
             quotationId,
             amount,
             paymentMethod || 'TRANSFER',
@@ -343,18 +451,20 @@ export async function POST(request: NextRequest) {
         );
         documentNumber = receiptNumber;
         
-        // Update invoice paidAmount
-        await connection.query(
-          `UPDATE invoices SET 
-            paidAmount = COALESCE(paidAmount, 0) + ?,
-            status = CASE 
-              WHEN COALESCE(paidAmount, 0) + ? >= grandTotal THEN 'PAID'
-              ELSE 'PARTIAL_PAID'
-            END,
-            updatedAt = NOW()
-           WHERE id = ?`,
-          [amount, amount, invoiceId]
-        );
+        // Update invoice paidAmount (ทำเฉพาะเมื่อผูกกับใบแจ้งหนี้จริง — กรณีบันทึกตรงกับ QT ยอดจะถูกคำนวณสดจาก customer_transactions อยู่แล้ว)
+        if (finalInvoiceId) {
+          await connection.query(
+            `UPDATE invoices SET 
+              paidAmount = COALESCE(paidAmount, 0) + ?,
+              status = CASE 
+                WHEN COALESCE(paidAmount, 0) + ? >= grandTotal THEN 'PAID'
+                ELSE 'PARTIAL_PAID'
+              END,
+              updatedAt = NOW()
+             WHERE id = ?`,
+            [amount, amount, finalInvoiceId]
+          );
+        }
       } else {
         // Issue Credit Note
         const creditNoteNumber = await generateDocumentNumber('CREDIT_NOTE', connection);
@@ -367,7 +477,7 @@ export async function POST(request: NextRequest) {
           [
             creditNoteNumber,
             transactionId,
-            invoiceId,
+            finalInvoiceId,
             quotationId,
             amount,
             refundReason,
@@ -379,19 +489,21 @@ export async function POST(request: NextRequest) {
         );
         documentNumber = creditNoteNumber;
         
-        // Update invoice refundedAmount
-        await connection.query(
-          `UPDATE invoices SET 
-            refundedAmount = COALESCE(refundedAmount, 0) + ?,
-            status = CASE 
-              WHEN COALESCE(paidAmount, 0) - COALESCE(refundedAmount, 0) - ? <= 0 THEN 'CANCELLED'
-              WHEN COALESCE(paidAmount, 0) - COALESCE(refundedAmount, 0) - ? < grandTotal THEN 'PARTIAL_PAID'
-              ELSE status
-            END,
-            updatedAt = NOW()
-           WHERE id = ?`,
-          [amount, amount, amount, invoiceId]
-        );
+        // Update invoice refundedAmount (เฉพาะเมื่อผูกกับใบแจ้งหนี้จริง)
+        if (finalInvoiceId) {
+          await connection.query(
+            `UPDATE invoices SET 
+              refundedAmount = COALESCE(refundedAmount, 0) + ?,
+              status = CASE 
+                WHEN COALESCE(paidAmount, 0) - COALESCE(refundedAmount, 0) - ? <= 0 THEN 'CANCELLED'
+                WHEN COALESCE(paidAmount, 0) - COALESCE(refundedAmount, 0) - ? < grandTotal THEN 'PARTIAL_PAID'
+                ELSE status
+              END,
+              updatedAt = NOW()
+             WHERE id = ?`,
+            [amount, amount, amount, finalInvoiceId]
+          );
+        }
       }
     }
     
@@ -417,6 +529,31 @@ export async function POST(request: NextRequest) {
         }
       } catch (lineErr) {
         console.error('LINE OA forward slip failed:', lineErr);
+      }
+    }
+
+    // แจ้งเตือน LINE OA แยกต่างหาก แบบ best-effort — เฉพาะกรณีสลิปนี้ถูกใช้ซ้ำกับรายการอื่นมาก่อน (แบ่งชำระหลายใบแจ้งหนี้)
+    if (slipReuseInfo) {
+      try {
+        const lineSvc = await LineOaService.fromSettings();
+        const lineCfg = await LineOaService.loadConfig();
+        if (lineCfg.enabled && lineSvc.isConfigured) {
+          const reuseText = LineOaService.buildSlipReuseText({
+            transactionNumber,
+            referenceNumber: finalReferenceNumber as string,
+            amount,
+            customerName: invoice.customerName || null,
+            quotationNumber: invoice.quotationNumber || null,
+            invoiceNumber: invoice.invoiceNumber || null,
+            totalAmount: slipReuseInfo.totalAmount,
+            usedAmountBefore: slipReuseInfo.usedAmountBefore,
+            remainingAfter: slipReuseInfo.remainingAfter,
+            usages: slipReuseInfo.usages,
+          });
+          await lineSvc.pushSlipNotification({ imageUrl: '', text: reuseText });
+        }
+      } catch (lineErr) {
+        console.error('LINE OA slip-reuse notification failed:', lineErr);
       }
     }
     

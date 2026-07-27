@@ -194,4 +194,37 @@ export class LineOaService {
     ].filter(Boolean);
     return lines.join('\n');
   }
+
+  /** สร้างข้อความแจ้งเตือน "ใช้สลิปเดิมซ้ำกับรายการอื่น" (แบ่งชำระหลายใบแจ้งหนี้ด้วยสลิปใบเดียวกัน) */
+  static buildSlipReuseText(params: {
+    transactionNumber: string;
+    referenceNumber: string;
+    amount: number;
+    customerName?: string | null;
+    quotationNumber?: string | null;
+    invoiceNumber?: string | null;
+    totalAmount?: number | null;
+    usedAmountBefore: number;
+    remainingAfter?: number | null;
+    usages: { quotationNumber?: string | null; invoiceNumber?: string | null; transactionNumber: string; amount: number }[];
+  }): string {
+    const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+    const usedList = params.usages
+      .map((u) => `${[u.quotationNumber, u.invoiceNumber].filter(Boolean).join('/') || u.transactionNumber} (${fmt(u.amount)} บาท)`)
+      .join(', ');
+    const lines = [
+      `🔁 ใช้สลิปเดิมซ้ำกับรายการอื่น`,
+      `เลขที่รายการนี้: ${params.transactionNumber}`,
+      params.quotationNumber ? `ใบเสนอราคา: ${params.quotationNumber}` : null,
+      params.invoiceNumber ? `ใบแจ้งหนี้: ${params.invoiceNumber}` : null,
+      params.customerName ? `ลูกค้า: ${params.customerName}` : null,
+      `Ref: ${params.referenceNumber}`,
+      `ยอดรายการนี้: ${fmt(params.amount)} บาท`,
+      params.totalAmount != null ? `ยอดรวมในสลิป: ${fmt(params.totalAmount)} บาท` : null,
+      `ใช้ไปแล้วก่อนหน้า: ${fmt(params.usedAmountBefore)} บาท`,
+      params.remainingAfter != null ? `คงเหลือหลังรายการนี้: ${fmt(params.remainingAfter)} บาท` : null,
+      usedList ? `เคยใช้กับ: ${usedList}` : null,
+    ].filter(Boolean);
+    return lines.join('\n');
+  }
 }

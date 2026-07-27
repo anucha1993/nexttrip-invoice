@@ -1804,6 +1804,12 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
     slipData: unknown;
     duplicate?: boolean;
     duplicateInfo?: any;
+    usage?: {
+      totalAmount: number | null;
+      usedAmount: number;
+      remainingAmount: number | null;
+      usages: any[];
+    } | null;
     message?: string;
     verifiedBankAccountId?: string;
   } | null>(null);
@@ -1905,6 +1911,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
         slipRef: v.slip?.slipRef ?? null,
         slipStatusCode: v.slip?.slipStatusCode ?? null,
         slipData: v.slip?.slipData ?? null,
+        usage: v.usage ?? null,
         verifiedBankAccountId: bankAccountId,
       };
     }
@@ -1916,7 +1923,8 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
         slipData: null,
         duplicate: true,
         duplicateInfo: v.duplicate,
-        message: 'สลิปนี้ถูกใช้บันทึกแล้วในระบบ',
+        usage: v.usage ?? null,
+        message: v.message || 'สลิปนี้ถูกใช้บันทึกแล้วในระบบ',
         verifiedBankAccountId: bankAccountId,
       };
     }
@@ -1952,9 +1960,9 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
         }
       } else if (result.duplicate) {
         alert(
-          `✖ สลิปนี้ถูกใช้บันทึกแล้วในระบบ${result.duplicateInfo?.transactionNumber ? ` (เลขที่ ${result.duplicateInfo.transactionNumber})` : ''} กรุณาแนบสลิปใบอื่น`
+          `✖ ${result.message || 'สลิปนี้ถูกใช้บันทึกแล้วในระบบ'} กรุณาแนบสลิปใบอื่น`
         );
-        // ลบไฟล์ที่แนบออกเพราะใช้ซ้ำไม่ได้
+        // ลบไฟล์ที่แนบออกเพราะใช้ซ้ำไม่ได้ (ใช้จนครบยอดแล้ว)
         setSlipFile(null);
         setSlipPreview(null);
         setSlipVerifyResult(null);
@@ -1967,8 +1975,8 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
   };
 
   const handlePayment = async () => {
-    if (!selectedInvoice || !paymentAmount) {
-      alert('กรุณาเลือกใบแจ้งหนี้และระบุยอดเงิน');
+    if (!paymentAmount) {
+      alert('กรุณาระบุยอดเงิน');
       return;
     }
 
@@ -2024,7 +2032,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
           setSenderAccountNumber(senderAccountNumberToSave);
         } else if (result.duplicate) {
           alert(
-            `✖ สลิปนี้ถูกใช้บันทึกแล้วในระบบ${result.duplicateInfo?.transactionNumber ? ` (เลขที่ ${result.duplicateInfo.transactionNumber})` : ''} ไม่สามารถบันทึกซ้ำได้`
+            `✖ ${result.message || 'สลิปนี้ถูกใช้บันทึกแล้วในระบบ'} ไม่สามารถบันทึกซ้ำได้`
           );
           setSubmitting(false);
           return;
@@ -2081,7 +2089,8 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transactionType: 'PAYMENT',
-          invoiceId: selectedInvoice.id,
+          invoiceId: selectedInvoice ? selectedInvoice.id : null,
+          quotationId: quotation.id,
           amount: parseFloat(parseFloat(paymentAmount).toFixed(2)),
           paymentMethod,
           paymentDate,
@@ -2133,7 +2142,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
   };
 
   const handleRefund = async () => {
-    if (!selectedInvoice || !paymentAmount || !refundReason) {
+    if (!paymentAmount || !refundReason) {
       alert('กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
@@ -2174,7 +2183,8 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transactionType: 'REFUND',
-          invoiceId: selectedInvoice.id,
+          invoiceId: selectedInvoice ? selectedInvoice.id : null,
+          quotationId: quotation.id,
           amount: parseFloat(parseFloat(paymentAmount).toFixed(2)),
           paymentMethod,
           paymentDate,
@@ -2310,8 +2320,13 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
     setEditingTransactionId(tx.id);
     
     // Pre-fill form with transaction data
-    const inv = invoices.find(i => i.id === tx.invoiceId);
-    setSelectedInvoice(inv);
+    if (tx.invoiceId) {
+      const inv = invoices.find(i => i.id === tx.invoiceId);
+      setSelectedInvoice(inv);
+    } else {
+      // รายการนี้บันทึกอ้างอิง QT ตรง ไม่ผูกใบแจ้งหนี้
+      setSelectedInvoice(null);
+    }
     // Round amount to 2 decimal places
     const amount = Math.round(parseFloat(tx.amount || 0) * 100) / 100;
     setPaymentAmount(amount.toFixed(2));
@@ -2460,16 +2475,6 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
     );
   };
 
-  // Get invoices that can receive payment
-  const payableInvoices = invoices.filter(
-    inv => inv.status !== 'CANCELLED' && inv.status !== 'VOIDED' && inv.status !== 'PAID'
-  );
-
-  // Get invoices that can be refunded (has payments)
-  const refundableInvoices = invoices.filter(
-    inv => parseFloat(inv.paidAmount || 0) > parseFloat(inv.refundedAmount || 0)
-  );
-
   return (
     <Card>
       <CardHeader>
@@ -2496,8 +2501,10 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
             <Button 
               size="sm" 
               className="text-xs sm:text-sm bg-green-600 hover:bg-green-700"
-              onClick={() => { resetForm(); setShowPaymentModal(true); }}
-              disabled={payableInvoices.length === 0}
+              onClick={() => {
+                resetForm();
+                setShowPaymentModal(true);
+              }}
             >
               <Plus className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">บันทึกรับเงิน</span>
@@ -2507,8 +2514,13 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
               size="sm" 
               variant="outline"
               className="text-xs sm:text-sm text-red-600 border-red-300 hover:bg-red-50"
-              onClick={() => setShowRefundModal(true)}
-              disabled={refundableInvoices.length === 0}
+              onClick={() => {
+                resetForm();
+                const qtRefundable = Math.round((totalPaid - totalRefunded) * 100) / 100;
+                setPaymentAmount(qtRefundable > 0 ? qtRefundable.toFixed(2) : '');
+                setShowRefundModal(true);
+              }}
+              disabled={Math.round((totalPaid - totalRefunded) * 100) / 100 <= 0}
             >
               <Plus className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">บันทึกคืนเงิน</span>
@@ -2581,7 +2593,9 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                           {tx.transactionType === 'PAYMENT' ? 'รับเงิน' : 'คืนเงิน'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-gray-600">{tx.invoiceNumber}</td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {tx.invoiceNumber || <span className="text-xs italic text-gray-400">อ้างอิง QT ตรง</span>}
+                      </td>
                       <td className="py-3 px-4">{formatDate(tx.paymentDate)}</td>
                       <td className={`py-3 px-4 text-right font-medium ${
                         tx.transactionType === 'PAYMENT' ? 'text-green-600' : 'text-red-600'
@@ -2704,54 +2718,23 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
             <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* ฝั่งซ้าย: ข้อมูลการชำระเงิน */}
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">เลือกใบแจ้งหนี้ *</label>
-                  <select
-                    className="w-full border rounded-lg px-3 py-2"
-                    value={selectedInvoice?.id || ''}
-                    onChange={(e) => {
-                      const allInvoices = editingTransactionId && selectedInvoice && !payableInvoices.find(i => i.id === selectedInvoice.id)
-                        ? [...payableInvoices, selectedInvoice]
-                        : payableInvoices;
-                      const inv = allInvoices.find(i => i.id === parseInt(e.target.value));
-                      setSelectedInvoice(inv);
-                      if (inv) {
-                        // คงเหลือ = grandTotal - paidAmount + refundedAmount
-                        const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
-                        setPaymentAmount(balance.toFixed(2));
-                      }
-                    }}
-                  >
-                    <option value="">-- เลือก --</option>
-                    {(() => {
-                      // เมื่อแก้ไข ให้รวม invoice ที่ถูกเลือกไว้เข้าไปด้วย
-                      const displayInvoices = editingTransactionId && selectedInvoice && !payableInvoices.find(i => i.id === selectedInvoice.id)
-                        ? [...payableInvoices, selectedInvoice]
-                        : payableInvoices;
-                      return displayInvoices.map(inv => {
-                        // คงเหลือ = grandTotal - paidAmount + refundedAmount
-                        const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
-                        return (
-                          <option key={inv.id} value={inv.id}>
-                            {inv.invoiceNumber} - คงเหลือ {balance.toLocaleString()} ฿
-                          </option>
-                        );
-                      });
-                    })()}
-                  </select>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                  ผูกกับใบเสนอราคา (QT): <span className="font-medium">{quotation.quotationNumber}</span> โดยอัตโนมัติ
+                  {selectedInvoice && (
+                    <span className="block text-xs text-blue-500 mt-1">(รายการเดิมผูกกับใบแจ้งหนี้ {selectedInvoice.invoiceNumber})</span>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">ยอดเงิน *</label>
                   <input
                     type="number" 
-                    className={`w-full border rounded-lg px-3 py-2 ${refLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`}
+                    className="w-full border rounded-lg px-3 py-2"
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(e.target.value)}
-                    readOnly={refLocked}
                     placeholder="0.00"
                   />
                   {refLocked && (
-                    <p className="text-xs text-green-600 mt-1">ล็อกอัตโนมัติจากผลตรวจสอบสลิป ไม่สามารถแก้ไขเองได้</p>
+                    <p className="text-xs text-blue-600 mt-1">แก้ไขยอดเงินได้ตามปกติ (แบ่งจ่ายจากสลิปเดียวกันได้ ตราบไม่เกินยอดจริงในสลิป)</p>
                   )}
                 </div>
                 <div>
@@ -2937,7 +2920,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                           </span>
                           <span className="block mt-0.5 text-blue-600">
                             รองรับเฉพาะสลิปที่มี QR Code เท่านั้น เมื่อตรวจสำเร็จระบบจะดึงเลขที่อ้างอิง (Ref)
-                            มาใส่ให้อัตโนมัติ และจะบล็อกการบันทึกหาก Ref ซ้ำกับรายการอื่น
+                            มาใส่ให้อัตโนมัติ — สลิปใบเดียวกันแบ่งใช้ชำระหลายใบแจ้งหนี้ได้ ตราบไม่เกินยอดเงินจริงในสลิป
                           </span>
                         </span>
                       </label>
@@ -2955,6 +2938,26 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                       <span>
                         ตรวจสอบสลิปสำเร็จ{slipVerifyResult.slipRef ? ` — Ref: ${slipVerifyResult.slipRef}` : ''}
                         <span className="block text-green-600">ระบบเติมเลขที่อ้างอิง/ยอดเงิน/วันที่ให้อัตโนมัติแล้ว กรุณาตรวจสอบอีกครั้งก่อนบันทึก</span>
+                      </span>
+                    </div>
+                  )}
+                  {!verifyingSlip && slipVerifyResult?.ok && !!slipVerifyResult.usage && slipVerifyResult.usage.usages.length > 0 && (
+                    <div className="mt-2 flex items-start gap-2 text-xs text-amber-700 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                      <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>
+                        สลิปนี้เคยถูกใช้แนบมาก่อนแล้ว (ยอดรวมในสลิป{' '}
+                        {slipVerifyResult.usage.totalAmount?.toLocaleString('th-TH')} บาท — ใช้ไปแล้ว{' '}
+                        {slipVerifyResult.usage.usedAmount.toLocaleString('th-TH')} บาท — เหลือใช้ได้อีก{' '}
+                        <b>{slipVerifyResult.usage.remainingAmount?.toLocaleString('th-TH')} บาท</b>)
+                        <span className="block mt-1">
+                          เคยใช้กับ:{' '}
+                          {slipVerifyResult.usage.usages
+                            .map(
+                              (u: any) =>
+                                `${[u.quotationNumber, u.invoiceNumber].filter(Boolean).join('/') || u.transactionNumber} (${parseFloat(u.amount).toLocaleString('th-TH')} บาท)`
+                            )
+                            .join(', ')}
+                        </span>
                       </span>
                     </div>
                   )}
@@ -3023,34 +3026,12 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                 ⚠️ การคืนเงินจะออกใบลดหนี้อัตโนมัติ
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">เลือกใบแจ้งหนี้ *</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={selectedInvoice?.id || ''}
-                  onChange={(e) => {
-                    const allInvoices = editingTransactionId && selectedInvoice && !refundableInvoices.find(i => i.id === selectedInvoice.id)
-                      ? [...refundableInvoices, selectedInvoice]
-                      : refundableInvoices;
-                    const inv = allInvoices.find(i => i.id === parseInt(e.target.value));
-                    setSelectedInvoice(inv);
-                  }}
-                >
-                  <option value="">-- เลือก --</option>
-                  {(() => {
-                    // เมื่อแก้ไข ให้รวม invoice ที่ถูกเลือกไว้เข้าไปด้วย
-                    const displayInvoices = editingTransactionId && selectedInvoice && !refundableInvoices.find(i => i.id === selectedInvoice.id)
-                      ? [...refundableInvoices, selectedInvoice]
-                      : refundableInvoices;
-                    return displayInvoices.map(inv => {
-                      const refundable = Math.round((parseFloat(inv.paidAmount || 0) - parseFloat(inv.refundedAmount || 0)) * 100) / 100;
-                      return (
-                        <option key={inv.id} value={inv.id}>
-                          {inv.invoiceNumber} - ชำระแล้ว {refundable.toLocaleString()} ฿
-                        </option>
-                      );
-                    });
-                  })()}
-                </select>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                  ผูกกับใบเสนอราคา (QT): <span className="font-medium">{quotation.quotationNumber}</span> โดยอัตโนมัติ
+                  {selectedInvoice && (
+                    <span className="block text-xs text-blue-500 mt-1">(รายการเดิมผูกกับใบแจ้งหนี้ {selectedInvoice.invoiceNumber})</span>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">ยอดคืนเงิน *</label>

@@ -41,6 +41,18 @@ interface Invoice {
   customerId: string;
 }
 
+// ใบเสนอราคา (QT) สำหรับกรณีบันทึกรับเงินโดยตรง ไม่ผ่านใบแจ้งหนี้
+interface QuotationDirect {
+  id: number;
+  quotationNumber: string;
+  tourName: string;
+  grandTotal: number;
+  customerId: string;
+  totalPaid: number;
+  totalRefunded: number;
+  balanceAmount: number;
+}
+
 interface BankAccount {
   id: number;
   accountName: string;
@@ -76,6 +88,12 @@ export default function CreatePaymentPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
+  // โหมดการบันทึกรับเงิน: ผ่านใบแจ้งหนี้ หรืออ้างอิง QT ตรง (ไม่ผ่านใบแจ้งหนี้)
+  const [paymentMode, setPaymentMode] = useState<'INVOICE' | 'QUOTATION'>('INVOICE');
+  const [quotationsDirect, setQuotationsDirect] = useState<QuotationDirect[]>([]);
+  const [selectedQuotationDirect, setSelectedQuotationDirect] = useState<QuotationDirect | null>(null);
+  const [loadingQuotations, setLoadingQuotations] = useState(false);
+
   // Payment form
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('TRANSFER');
@@ -108,9 +126,12 @@ export default function CreatePaymentPage() {
   useEffect(() => {
     if (selectedCustomer) {
       fetchCustomerInvoices(selectedCustomer.id);
+      fetchCustomerQuotations(selectedCustomer.id);
     } else {
       setInvoices([]);
       setSelectedInvoice(null);
+      setQuotationsDirect([]);
+      setSelectedQuotationDirect(null);
     }
   }, [selectedCustomer]);
 
@@ -163,6 +184,24 @@ export default function CreatePaymentPage() {
       console.error('Error fetching invoices:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ดึงรายการใบเสนอราคาของลูกค้า สำหรับกรณีบันทึกรับเงินโดยตรง ไม่ผ่านใบแจ้งหนี้
+  const fetchCustomerQuotations = async (customerId: string) => {
+    try {
+      setLoadingQuotations(true);
+      const response = await fetch(`/api/quotations?customerId=${customerId}&limit=100`);
+      if (response.ok) {
+        const data = await response.json();
+        const list = data.data || data.quotations || [];
+        const activeQuotations = list.filter((q: any) => q.status !== 'CANCELLED' && q.status !== 'VOIDED');
+        setQuotationsDirect(activeQuotations);
+      }
+    } catch (error) {
+      console.error('Error fetching quotations:', error);
+    } finally {
+      setLoadingQuotations(false);
     }
   };
 
@@ -222,16 +261,52 @@ export default function CreatePaymentPage() {
     setCustomerSearch(customer.name);
     setShowCustomerDropdown(false);
     setSelectedInvoice(null);
+    setSelectedQuotationDirect(null);
+    setPaymentMode('INVOICE');
     setStep(2);
   };
 
   const handleSelectInvoice = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
+    setSelectedQuotationDirect(null);
+    setStep(3);
+  };
+
+  // เลือกใบเสนอราคา (QT) โดยตรง ไม่ผ่านใบแจ้งหนี้ — ดึงยอดคงเหลือที่แท้จริงจาก API รายละเอียด (คำนวณจาก customer_transactions ทั้งหมด ไม่ใช่แค่ยอดผ่านใบแจ้งหนี้)
+  const handleSelectQuotationDirect = async (q: QuotationDirect) => {
+    try {
+      setLoadingQuotations(true);
+      const res = await fetch(`/api/quotations/${q.id}`);
+      if (res.ok) {
+        const detail = await res.json();
+        const grandTotal = parseFloat(detail.grandTotal || q.grandTotal || 0);
+        const totalPaid = parseFloat(detail.totalPaid || 0);
+        const totalRefunded = parseFloat(detail.totalRefunded || 0);
+        const balanceAmount = Math.max(0, parseFloat(detail.balanceAmount ?? (grandTotal - totalPaid + totalRefunded)));
+        const full: QuotationDirect = {
+          id: q.id,
+          quotationNumber: q.quotationNumber,
+          tourName: q.tourName,
+          grandTotal,
+          customerId: q.customerId,
+          totalPaid,
+          totalRefunded,
+          balanceAmount,
+        };
+        setSelectedQuotationDirect(full);
+        setPaymentAmount(balanceAmount > 0 ? balanceAmount.toFixed(2) : '');
+      }
+    } catch (error) {
+      console.error('Error fetching quotation detail:', error);
+    } finally {
+      setLoadingQuotations(false);
+    }
+    setSelectedInvoice(null);
     setStep(3);
   };
 
   const handleSubmit = async () => {
-    if (!selectedInvoice || !paymentAmount) {
+    if ((!selectedInvoice && !selectedQuotationDirect) || !paymentAmount) {
       alert('กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
@@ -266,11 +341,8 @@ export default function CreatePaymentPage() {
           slipData = v.slip?.slipData ?? null;
           if (slipRef) setReferenceNumber(slipRef);
         } else if (v.code === 'duplicate_local') {
-          // สลิปซ้ำ — บล็อคทันที กันบันทึกซ้ำ
-          const dup = v.duplicate;
-          alert(
-            `✖ สลิปนี้ถูกใช้บันทึกแล้วในระบบ${dup?.transactionNumber ? ` (เลขที่ ${dup.transactionNumber})` : ''} ไม่สามารถบันทึกซ้ำได้`
-          );
+          // สลิปถูกใช้จนครบยอดแล้ว — บล็อคทันที กันบันทึกซ้ำ
+          alert(`✖ ${v.message || 'สลิปนี้ถูกใช้บันทึกแล้วในระบบ'} ไม่สามารถบันทึกซ้ำได้`);
           setSubmitting(false);
           return;
         } else {
@@ -308,8 +380,8 @@ export default function CreatePaymentPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transactionType: 'PAYMENT',
-          invoiceId: selectedInvoice.id,
-          quotationId: selectedInvoice.quotationId,
+          invoiceId: selectedInvoice ? selectedInvoice.id : null,
+          quotationId: selectedInvoice ? selectedInvoice.quotationId : selectedQuotationDirect?.id,
           amount,
           paymentMethod,
           paymentDate,
@@ -447,67 +519,135 @@ export default function CreatePaymentPage() {
             </CardContent>
           </Card>
 
-          {/* Step 2: Select Invoice */}
+          {/* Step 2: Select Invoice or Quotation directly */}
           {step >= 2 && (
             <Card className="border-0 shadow-lg">
               <CardHeader>
                 <div className="flex items-center gap-2 font-semibold">
                   <FileText className="w-5 h-5 text-green-600" />
-                  ขั้นตอนที่ 2: เลือกใบแจ้งหนี้
+                  ขั้นตอนที่ 2: เลือกใบแจ้งหนี้ หรือใบเสนอราคา
                 </div>
               </CardHeader>
               <CardContent>
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-                  </div>
-                ) : invoices.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>ไม่พบใบแจ้งหนี้ที่ค้างชำระ</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {invoices.map(invoice => {
-                      const remaining = invoice.grandTotal - (invoice.paidAmount || 0) + (invoice.refundedAmount || 0);
-                      const isSelected = selectedInvoice?.id === invoice.id;
-                      return (
-                        <div
-                          key={invoice.id}
-                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                            isSelected 
-                              ? 'border-green-500 bg-green-50' 
-                              : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
-                          }`}
-                          onClick={() => handleSelectInvoice(invoice)}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="font-medium text-gray-900">{invoice.invoiceNumber}</div>
-                              <div className="text-sm text-gray-500">{invoice.tourName}</div>
-                              <div className="text-xs text-gray-400 mt-1">{invoice.quotationNumber}</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm text-gray-500">ยอดค้างชำระ</div>
-                              <div className="font-bold text-green-600">
-                                ฿{remaining.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                <div className="flex gap-2 mb-4">
+                  <button
+                    type="button"
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border-2 transition-all ${
+                      paymentMode === 'INVOICE'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}
+                    onClick={() => { setPaymentMode('INVOICE'); setSelectedQuotationDirect(null); setStep(2); }}
+                  >
+                    เลือกใบแจ้งหนี้
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border-2 transition-all ${
+                      paymentMode === 'QUOTATION'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}
+                    onClick={() => { setPaymentMode('QUOTATION'); setSelectedInvoice(null); setStep(2); }}
+                  >
+                    ไม่ผูกใบแจ้งหนี้ (อ้างอิง QT ตรง)
+                  </button>
+                </div>
+
+                {paymentMode === 'INVOICE' ? (
+                  loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                    </div>
+                  ) : invoices.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p>ไม่พบใบแจ้งหนี้ที่ค้างชำระ</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {invoices.map(invoice => {
+                        const remaining = invoice.grandTotal - (invoice.paidAmount || 0) + (invoice.refundedAmount || 0);
+                        const isSelected = selectedInvoice?.id === invoice.id;
+                        return (
+                          <div
+                            key={invoice.id}
+                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                              isSelected 
+                                ? 'border-green-500 bg-green-50' 
+                                : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
+                            }`}
+                            onClick={() => handleSelectInvoice(invoice)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="font-medium text-gray-900">{invoice.invoiceNumber}</div>
+                                <div className="text-sm text-gray-500">{invoice.tourName}</div>
+                                <div className="text-xs text-gray-400 mt-1">{invoice.quotationNumber}</div>
                               </div>
-                              <div className="text-xs text-gray-400">
-                                จากทั้งหมด ฿{invoice.grandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                              <div className="text-right">
+                                <div className="text-sm text-gray-500">ยอดค้างชำระ</div>
+                                <div className="font-bold text-green-600">
+                                  ฿{remaining.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  จากทั้งหมด ฿{invoice.grandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : (
+                  loadingQuotations ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                    </div>
+                  ) : quotationsDirect.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p>ไม่พบใบเสนอราคาของลูกค้ารายนี้</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {quotationsDirect.map(q => {
+                        const isSelected = selectedQuotationDirect?.id === q.id;
+                        return (
+                          <div
+                            key={q.id}
+                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                              isSelected
+                                ? 'border-green-500 bg-green-50'
+                                : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
+                            }`}
+                            onClick={() => handleSelectQuotationDirect(q)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="font-medium text-gray-900">{q.quotationNumber}</div>
+                                <div className="text-sm text-gray-500">{q.tourName}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xs text-gray-400">ยอดใบเสนอราคา</div>
+                                <div className="font-bold text-green-600">
+                                  ฿{parseFloat(String(q.grandTotal || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
                 )}
               </CardContent>
             </Card>
           )}
 
           {/* Step 3: Payment Form */}
-          {step >= 3 && selectedInvoice && (
+          {step >= 3 && (selectedInvoice || selectedQuotationDirect) && (
             <Card className="border-0 shadow-lg">
               <CardHeader>
                 <div className="flex items-center gap-2 font-semibold">
@@ -664,7 +804,7 @@ export default function CreatePaymentPage() {
 
         {/* Sidebar - Summary */}
         <div className="space-y-6">
-          {selectedInvoice && (
+          {(selectedInvoice || selectedQuotationDirect) && (
             <Card className="border-0 shadow-lg">
               <CardHeader>
                 <div className="flex items-center gap-2 font-semibold">
@@ -674,8 +814,8 @@ export default function CreatePaymentPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <div className="text-sm text-gray-500">ใบแจ้งหนี้</div>
-                  <div className="font-medium">{selectedInvoice.invoiceNumber}</div>
+                  <div className="text-sm text-gray-500">{selectedInvoice ? 'ใบแจ้งหนี้' : 'ใบเสนอราคา (ไม่มีใบแจ้งหนี้)'}</div>
+                  <div className="font-medium">{selectedInvoice ? selectedInvoice.invoiceNumber : selectedQuotationDirect?.quotationNumber}</div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-500">ลูกค้า</div>
@@ -683,34 +823,63 @@ export default function CreatePaymentPage() {
                 </div>
                 <div>
                   <div className="text-sm text-gray-500">ทัวร์</div>
-                  <div className="font-medium">{selectedInvoice.tourName}</div>
+                  <div className="font-medium">{selectedInvoice ? selectedInvoice.tourName : selectedQuotationDirect?.tourName}</div>
                 </div>
-                <div className="border-t pt-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">ยอดใบแจ้งหนี้</span>
-                    <span>฿{selectedInvoice.grandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">ชำระแล้ว</span>
-                    <span className="text-green-600">
-                      ฿{(selectedInvoice.paidAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  {(selectedInvoice.refundedAmount || 0) > 0 && (
+                {selectedInvoice ? (
+                  <div className="border-t pt-4 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">คืนเงิน</span>
-                      <span className="text-red-600">
-                        -฿{(selectedInvoice.refundedAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                      <span className="text-gray-500">ยอดใบแจ้งหนี้</span>
+                      <span>฿{selectedInvoice.grandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">ชำระแล้ว</span>
+                      <span className="text-green-600">
+                        ฿{(selectedInvoice.paidAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
-                  )}
-                  <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                    <span>ยอดค้างชำระ</span>
-                    <span className="text-green-600">
-                      ฿{Math.max(0, selectedInvoice.grandTotal - (selectedInvoice.paidAmount || 0) + (selectedInvoice.refundedAmount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                    </span>
+                    {(selectedInvoice.refundedAmount || 0) > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">คืนเงิน</span>
+                        <span className="text-red-600">
+                          -฿{(selectedInvoice.refundedAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-lg pt-2 border-t">
+                      <span>ยอดค้างชำระ</span>
+                      <span className="text-green-600">
+                        ฿{Math.max(0, selectedInvoice.grandTotal - (selectedInvoice.paidAmount || 0) + (selectedInvoice.refundedAmount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                ) : selectedQuotationDirect && (
+                  <div className="border-t pt-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">ยอดใบเสนอราคา</span>
+                      <span>฿{selectedQuotationDirect.grandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">ชำระแล้ว</span>
+                      <span className="text-green-600">
+                        ฿{(selectedQuotationDirect.totalPaid || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    {(selectedQuotationDirect.totalRefunded || 0) > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">คืนเงิน</span>
+                        <span className="text-red-600">
+                          -฿{(selectedQuotationDirect.totalRefunded || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-lg pt-2 border-t">
+                      <span>ยอดค้างชำระ</span>
+                      <span className="text-green-600">
+                        ฿{selectedQuotationDirect.balanceAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 
                 {paymentAmount && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-3">

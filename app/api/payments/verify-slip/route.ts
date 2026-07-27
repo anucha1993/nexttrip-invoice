@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { Slip2goService } from '@/lib/services/slip2go';
 import pool from '@/lib/db';
+import { getSlipUsage, SlipUsageItem } from '@/lib/helpers/slip-usage';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIMES = new Set(['image/png', 'image/jpeg', 'image/jpg']);
@@ -73,24 +74,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // เช็คซ้ำใน DB
+    // เช็คซ้ำใน DB — อนุญาตให้ "สลิปใบเดียวกัน" ถูกใช้แบ่งชำระได้หลายใบแจ้งหนี้/QT
+    // ตราบใดที่ยอดรวมที่ใช้ไปแล้ว + รายการนี้ ไม่เกินยอดเงินจริงในสลิป (data.amount)
     const transRef = result.data?.transRef || null;
+    const slipTotalAmount = typeof result.data?.amount === 'number' ? result.data.amount : null;
+    let usage: {
+      totalAmount: number | null;
+      usedAmount: number;
+      remainingAmount: number | null;
+      usages: SlipUsageItem[];
+    } | null = null;
+
     if (transRef) {
       if (!conn) conn = await pool.getConnection();
-      const dup = await conn.query(
-        `SELECT id, transactionNumber, invoiceId, amount, paymentDate
-           FROM customer_transactions
-          WHERE slipRef = ?
-          LIMIT 1`,
-        [transRef]
-      );
-      if (dup?.[0]) {
+      const { usedAmount, usages } = await getSlipUsage(conn, { slipRef: transRef });
+      const remainingAmount = slipTotalAmount != null ? Math.round((slipTotalAmount - usedAmount) * 100) / 100 : null;
+      usage = { totalAmount: slipTotalAmount, usedAmount, remainingAmount, usages };
+
+      // บล็อกจริงเฉพาะกรณี "ใช้จนครบยอดสลิปแล้ว" เท่านั้น
+      if (usages.length > 0 && remainingAmount != null && remainingAmount <= 0) {
         return NextResponse.json(
           {
             ok: false,
             code: 'duplicate_local',
-            message: 'สลิปนี้ถูกใช้บันทึกแล้วในระบบ',
-            duplicate: dup[0],
+            message: `สลิปนี้ถูกใช้จนครบยอด (${slipTotalAmount?.toLocaleString('th-TH')} บาท) แล้วในระบบ`,
+            duplicate: usages[usages.length - 1],
+            usage,
             data: result.data,
           },
           { status: 409 }
@@ -110,6 +119,8 @@ export async function POST(req: NextRequest) {
         slipData: result.data ?? null,
         slipVerifiedAt: new Date().toISOString(),
       },
+      // ข้อมูลการใช้สลิปนี้มาก่อนหน้า (ถ้ามี) — ให้ client แสดงแจ้งเตือนและจำกัดยอดที่กรอกได้
+      usage,
     });
   } catch (e) {
     if (e instanceof Response) return e;
