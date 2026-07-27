@@ -53,10 +53,7 @@ interface Transaction {
   chequeNumber: string | null;
   chequeDate: string | null;
   chequeBankId: number | null;
-<<<<<<< HEAD
-=======
   slipUrl: string | null;
->>>>>>> e6f5bd65117d7ff24d9805582389c1c2283c0838
 }
 
 interface GroupedData {
@@ -205,11 +202,7 @@ export default function PaymentsPage() {
       refundReason: '',
       bankAccountId: tx.bankAccountId ? tx.bankAccountId.toString() : '',
       chequeNumber: tx.chequeNumber || '',
-<<<<<<< HEAD
       chequeDate: chequeDate,
-=======
-      chequeDate: tx.chequeDate ? tx.chequeDate.slice(0, 10) : '',
->>>>>>> e6f5bd65117d7ff24d9805582389c1c2283c0838
       chequeBankId: tx.chequeBankId ? tx.chequeBankId.toString() : '',
     });
     // Set slip preview if exists
