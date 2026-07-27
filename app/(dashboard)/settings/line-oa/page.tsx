@@ -381,7 +381,7 @@ export default function LineOaSettingsPage() {
                       <Button
                         type="button"
                         size="sm"
-                        variant={targetId === f.userId ? 'outline' : 'default'}
+                        variant={targetId === f.userId ? 'outline' : 'primary'}
                         onClick={() => setTargetId(f.userId)}
                       >
                         ใช้ ID นี้
@@ -460,7 +460,7 @@ export default function LineOaSettingsPage() {
                       <Button
                         type="button"
                         size="sm"
-                        variant={targetId === ev.id ? 'outline' : 'default'}
+                        variant={targetId === ev.id ? 'outline' : 'primary'}
                         onClick={() => setTargetId(ev.id)}
                         disabled={!ev.id}
                       >

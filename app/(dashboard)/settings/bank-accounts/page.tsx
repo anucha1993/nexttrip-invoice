@@ -351,7 +351,7 @@ export default function BankAccountsSettingsPage() {
                         <td className="py-2 pr-3">
                           <Button
                             size="sm"
-                            variant={savedId === row.id ? 'outline' : 'default'}
+                            variant={savedId === row.id ? 'outline' : 'primary'}
                             onClick={() => saveRow(row)}
                             disabled={savingId === row.id}
                           >
