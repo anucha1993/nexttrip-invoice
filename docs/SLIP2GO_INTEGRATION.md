@@ -67,6 +67,12 @@ if (slipFile && paymentMethod === 'TRANSFER') {
 | `401000+` | Secret Key ไม่ถูกต้อง |
 | `duplicate_local` | (custom) เจอสลิปนี้บันทึกไว้แล้วในระบบ |
 
+## ความซ้ำ 2 แบบ (สำคัญ อย่าสับสน)
+
+1. **ซ้ำฝั่ง Slip2Go (`checkDuplicate` payload)** — Slip2Go ตอบ `409 Conflict` / message มีคำว่า "conflict" เมื่อสลิปใบเดียวกัน (QR/transRef เดิม) ถูกส่ง "เช็คผ่าน API" ซ้ำ เช่น ผู้ใช้แนบสลิปแล้วเปลี่ยนบัญชีธนาคารที่รับโอนภายหลัง ทำให้ระบบต้องยิงตรวจ receiver ใหม่ด้วยไฟล์เดิม — **ไม่ใช่การใช้ซ้ำจริง ไม่ควรบล็อก**
+   - `Slip2goService.callVerify()` (`lib/services/slip2go.ts`) จัดการเองอัตโนมัติ: ถ้าเจอ conflict แบบนี้ จะ retry อีกครั้งโดยปิด `checkDuplicate` เพื่อเอาข้อมูลสลิปจริงมาใช้ต่อ
+2. **ซ้ำจริงในระบบเรา (`customer_transactions.slipRef`)** — ตรวจใน `app/api/payments/verify-slip/route.ts` ว่า `transRef` นี้เคยถูก "บันทึก" (save) ธุรกรรมไปแล้วหรือยัง ถ้าเจอจะตอบ `409` + `code: 'duplicate_local'` — **อันนี้คือของจริง ต้องบล็อกเสมอ**
+
 ## ค่า setting ใน `company_settings`
 
 | Key | Default |

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use, Fragment } from 'react';
+import { useState, useEffect, useRef, use, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import {
   ArrowLeft, Pencil, FileText, Calendar, Users, DollarSign,
   Receipt, Wallet, ShoppingCart, TrendingUp, FileCheck, Upload, 
   ListChecks, PackageCheck, Plus, Eye, CheckCircle, Clock, Download,
-  Printer, XCircle, Trash2, ChevronDown, ChevronRight, User, CreditCard
+  Printer, XCircle, Trash2, ChevronDown, ChevronRight, User, CreditCard, ShieldCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import InvoiceModal from '@/components/invoices/invoice-modal';
@@ -1665,6 +1665,76 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
   );
 }
 
+// เทียบเลขบัญชีผู้รับโอนที่ Slip2Go อ่านได้ (อาจถูก mask บางหลักด้วย x) กับเลขบัญชีจริงในระบบเราเอง
+// เพื่อ auto-select บัญชีธนาคารที่รับโอนให้ตรงกับสลิป โดยระบบของเราเทียบเอง ไม่พึ่ง checkReceiver ของ Slip2Go
+function matchBankAccountByMaskedNumber(masked: string | undefined | null, accounts: any[]): any | null {
+  if (!masked || !accounts?.length) return null;
+  const m = masked.replace(/[-\s]/g, '');
+  if (!m) return null;
+  const matches = accounts.filter((acc) => {
+    const s = String(acc.accountNumber || '').replace(/[-\s]/g, '');
+    if (!s || s.length !== m.length) return false;
+    for (let i = 0; i < m.length; i++) {
+      const mc = m[i].toLowerCase();
+      if (mc === 'x') continue; // หลักที่ถูก mask — ข้ามไป
+      if (mc !== s[i]) return false;
+    }
+    return true;
+  });
+  return matches.length === 1 ? matches[0] : null; // มั่นใจเฉพาะเมื่อเจอจี่เดียว (ถ้ากำกวมหลายบัญชี ให้ผู้ใช้เลือกเอง)
+}
+
+// วันที่+เวลาแบบ 24 ชั่วโมงล้วน ไม่มี AM/PM
+// (ใช้แทน <input type="datetime-local"> เพราะ popup ปฏิทิน/เวลาของ Chrome/บางเบราว์เซอร์แสดง AM/PM
+// ตาม locale ของ OS เสมอ ไม่ว่าจะตั้ง lang="en-GB" ที่ input หรือไม่ก็ตาม การสร้าง select ชั่วโมง/นาทีเองการันตี 24 ชม. แน่นอน)
+// value/onChange ใช้รูปแบบ "YYYY-MM-DDTHH:mm" เดียวกับ datetime-local เดิม เพื่อให้ใช้กับ state paymentDate/transactionDate เดิมได้เลย
+function DateTime24Input({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const [datePart, timePart] = (value || '').split('T');
+  const [hh, mm] = (timePart || '00:00').split(':');
+  const inputCls = `border rounded-lg px-2 py-2 ${disabled ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`;
+
+  return (
+    <div className="flex gap-2">
+      <input
+        type="date"
+        className={`flex-1 ${inputCls}`}
+        value={datePart || ''}
+        onChange={(e) => onChange(`${e.target.value}T${hh || '00'}:${mm || '00'}`)}
+        disabled={disabled}
+      />
+      <select
+        className={inputCls}
+        value={hh || '00'}
+        onChange={(e) => onChange(`${datePart || ''}T${e.target.value}:${mm || '00'}`)}
+        disabled={disabled}
+      >
+        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map((h) => (
+          <option key={h} value={h}>{h}</option>
+        ))}
+      </select>
+      <span className="self-center text-gray-500">:</span>
+      <select
+        className={inputCls}
+        value={mm || '00'}
+        onChange={(e) => onChange(`${datePart || ''}T${hh || '00'}:${e.target.value}`)}
+        disabled={disabled}
+      >
+        {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map((m) => (
+          <option key={m} value={m}>{m}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotation: any; onPaymentChange?: () => void; refreshKey?: number }) {
   const { userId, userName } = useCurrentUser();
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -1682,6 +1752,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
   // Banks and accounts
   const [banks, setBanks] = useState<any[]>([]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const slipFileInputRef = useRef<HTMLInputElement>(null);
 
   // Helper function to get local datetime-local format
   const getLocalDateTimeString = (date?: Date | string): string => {
@@ -1706,7 +1777,13 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
   const [selectedBankAccountId, setSelectedBankAccountId] = useState('');
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
-  
+  // ข้อมูลผู้โอน (เติมอัตโนมัติจากผลตรวจสอบสลิป)
+  const [senderName, setSenderName] = useState('');
+  const [senderBankName, setSenderBankName] = useState('');
+  const [senderAccountNumber, setSenderAccountNumber] = useState('');
+  // true = รายการที่กำลังแก้ไขนี้เคยผ่านการตรวจสอบสลิปด้วย API มาแล้ว (ล็อก Ref/ผู้โอน ห้ามแก้)
+  const [editingTxSlipVerified, setEditingTxSlipVerified] = useState(false);
+
   // Cheque specific
   const [chequeNumber, setChequeNumber] = useState('');
   const [chequeDate, setChequeDate] = useState('');
@@ -1714,11 +1791,40 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
 
   // Editing state
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [hardDeletingTxId, setHardDeletingTxId] = useState<number | null>(null);
+
+  // Slip2Go / SlipAPDev verification
+  const [slip2goEnabled, setSlip2goEnabled] = useState(false);
+  const [checkSlipBeforeSave, setCheckSlipBeforeSave] = useState(true);
+  const [verifyingSlip, setVerifyingSlip] = useState(false);
+  const [slipVerifyResult, setSlipVerifyResult] = useState<{
+    ok: boolean;
+    slipRef: string | null;
+    slipStatusCode: string | null;
+    slipData: unknown;
+    duplicate?: boolean;
+    duplicateInfo?: any;
+    message?: string;
+    verifiedBankAccountId?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchData();
     fetchBanksAndAccounts();
+    fetchSlip2goStatus();
   }, [quotation.id, refreshKey]);
+
+  const fetchSlip2goStatus = async () => {
+    try {
+      const res = await fetch('/api/settings/slip2go');
+      if (res.ok) {
+        const data = await res.json();
+        setSlip2goEnabled(!!data.enabled && !!data.hasSecretKey);
+      }
+    } catch {
+      // โหลดสถานะไม่ได้ → ถือว่าไม่เปิดใช้งานตรวจสลิป
+    }
+  };
 
   const fetchBanksAndAccounts = async () => {
     try {
@@ -1781,6 +1887,85 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
   // เมื่อคืนเงิน ยอดสุทธิที่ลูกค้าจ่ายจริงลดลง ทำให้คงเหลือเพิ่มขึ้น
   const balance = Math.round((totalInvoiced - totalPaid + totalRefunded) * 100) / 100;
 
+  // เรียกตรวจสอบสลิปกับ SlipAPDev (ไม่จัดการ state/side-effect เอง แค่ยิง request แล้วคืนผล)
+  const runSlipVerification = async (file: File, bankAccountIdOverride?: string) => {
+    const bankAccountId = bankAccountIdOverride ?? selectedBankAccountId;
+    const vfd = new FormData();
+    vfd.append('file', file);
+    if (paymentAmount) vfd.append('amount', String(parseFloat(paymentAmount)));
+    vfd.append('amountType', 'gte');
+    if (bankAccountId) vfd.append('bankAccountId', bankAccountId);
+
+    const vres = await fetch('/api/payments/verify-slip', { method: 'POST', body: vfd });
+    const v = await vres.json();
+
+    if (vres.ok && v.ok) {
+      return {
+        ok: true,
+        slipRef: v.slip?.slipRef ?? null,
+        slipStatusCode: v.slip?.slipStatusCode ?? null,
+        slipData: v.slip?.slipData ?? null,
+        verifiedBankAccountId: bankAccountId,
+      };
+    }
+    if (v.code === 'duplicate_local') {
+      return {
+        ok: false,
+        slipRef: null,
+        slipStatusCode: null,
+        slipData: null,
+        duplicate: true,
+        duplicateInfo: v.duplicate,
+        message: 'สลิปนี้ถูกใช้บันทึกแล้วในระบบ',
+        verifiedBankAccountId: bankAccountId,
+      };
+    }
+    return { ok: false, slipRef: null, slipStatusCode: null, slipData: null, message: v.message || v.error || 'ไม่ทราบสาเหตุ', verifiedBankAccountId: bankAccountId };
+  };
+
+  // ตรวจสอบสลิปทันทีที่แนบเข้ามา (เรียกอัตโนมัติจาก handleSlipChange หรือเมื่อเปลี่ยนบัญชีธนาคารที่รับโอน) — เติมรายละเอียดให้ทันทีเมื่อตรวจผ่าน
+  const verifySlipNow = async (file: File, bankAccountIdOverride?: string) => {
+    setVerifyingSlip(true);
+    setSlipVerifyResult(null);
+    try {
+      const result = await runSlipVerification(file, bankAccountIdOverride);
+      setSlipVerifyResult(result);
+      if (result.ok) {
+        if (result.slipRef) setReferenceNumber(result.slipRef);
+        const d = result.slipData as any;
+        if (d?.amount && Number(d.amount) > 0) setPaymentAmount(String(d.amount));
+        if (d?.dateTime) {
+          const parsed = new Date(d.dateTime);
+          if (!isNaN(parsed.getTime())) setPaymentDate(getLocalDateTimeString(parsed));
+        }
+        // เติมข้อมูลผู้โอนอัตโนมัติจากผลตรวจสอบสลิป (ล็อกห้ามแก้ไขในฟอร์ม)
+        const sender = d?.sender;
+        setSenderName(sender?.account?.name || '');
+        setSenderBankName(sender?.bank?.name || sender?.bank?.id || '');
+        setSenderAccountNumber(sender?.account?.bank?.account || sender?.account?.proxy?.account || '');
+        // จับคู่บัญชีธนาคารที่รับโอนอัตโนมัติจากเลขบัญชีที่ Slip2Go อ่านได้ เทียบกับระบบของเราเอง (เฉพาะตอนแนบครั้งแรก ยังไม่ได้เลือกเองมาก่อน)
+        if (bankAccountIdOverride === undefined) {
+          const receiver = d?.receiver;
+          const receiverAccountNumberMasked = receiver?.account?.bank?.account || receiver?.account?.proxy?.account;
+          const matchedAccount = matchBankAccountByMaskedNumber(receiverAccountNumberMasked, bankAccounts);
+          if (matchedAccount) setSelectedBankAccountId(String(matchedAccount.id));
+        }
+      } else if (result.duplicate) {
+        alert(
+          `✖ สลิปนี้ถูกใช้บันทึกแล้วในระบบ${result.duplicateInfo?.transactionNumber ? ` (เลขที่ ${result.duplicateInfo.transactionNumber})` : ''} กรุณาแนบสลิปใบอื่น`
+        );
+        // ลบไฟล์ที่แนบออกเพราะใช้ซ้ำไม่ได้
+        setSlipFile(null);
+        setSlipPreview(null);
+        setSlipVerifyResult(null);
+      }
+    } catch {
+      setSlipVerifyResult({ ok: false, slipRef: null, slipStatusCode: null, slipData: null, message: 'เชื่อมต่อตรวจสอบสลิปไม่สำเร็จ' });
+    } finally {
+      setVerifyingSlip(false);
+    }
+  };
+
   const handlePayment = async () => {
     if (!selectedInvoice || !paymentAmount) {
       alert('กรุณาเลือกใบแจ้งหนี้และระบุยอดเงิน');
@@ -1798,6 +1983,67 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
       }
       if (paymentMethod === 'CHEQUE' && (!chequeBankId || !chequeNumber || !chequeDate)) {
         alert('กรุณากรอกข้อมูลเช็คให้ครบถ้วน');
+        setSubmitting(false);
+        return;
+      }
+
+      // ตรวจสอบสลิปด้วย SlipAPDev ก่อนบันทึก (เฉพาะโอนเงิน + ไฟล์รูป + เปิดใช้งาน + ผู้ใช้เลือกให้ตรวจ)
+      // ปกติจะตรวจไปแล้วตอนแนบไฟล์ (verifySlipNow) จึงใช้ผลที่แคชไว้ได้เลย ไม่ต้องตรวจซ้ำ
+      // (checkReceiver ถูกตัดออกแล้ว การเลือกบัญชีรับโอนจึงไม่มีผลต่อผลการตรวจสอบอีกต่อไป)
+      // การส่งสลิปเดิมไปเช็ค checkDuplicate ซ้ำจะโดน Slip2Go ตีกลับเป็นซ้ำ/ใช้ซ้ำเอง (เช่น "Slip is valid." ที่จริงๆคือเจอคำเตือนซ้ำ)
+      let slipRef: string | null = null;
+      let slipStatusCode: string | null = null;
+      let slipData: unknown = null;
+      // ข้อมูลผู้โอน — ค่าเริ่มต้นใช้ state ที่เติมไว้แล้ว (จากตอนแนบไฟล์/เปลี่ยนบัญชี) แล้วจะถูกทับด้วยผลตรวจสอบสดด้านล่างถ้ามี
+      let senderNameToSave = senderName;
+      let senderBankNameToSave = senderBankName;
+      let senderAccountNumberToSave = senderAccountNumber;
+      const isImageSlip = !!slipFile && slipFile.type.startsWith('image/');
+      if (checkSlipBeforeSave && slip2goEnabled && isImageSlip && paymentMethod === 'TRANSFER') {
+        let result = slipVerifyResult && slipVerifyResult.ok ? slipVerifyResult : null;
+        if (!result) {
+          setVerifyingSlip(true);
+          result = await runSlipVerification(slipFile as File);
+          setSlipVerifyResult(result);
+          setVerifyingSlip(false);
+        }
+
+        if (result.ok) {
+          slipRef = result.slipRef;
+          slipStatusCode = result.slipStatusCode;
+          slipData = result.slipData;
+          if (slipRef) setReferenceNumber(slipRef);
+          // เติมข้อมูลผู้โอนจากผลตรวจสอบสลิปล่าสุด (ล็อกห้ามแก้ไข)
+          const sd = slipData as any;
+          const sender = sd?.sender;
+          senderNameToSave = sender?.account?.name || '';
+          senderBankNameToSave = sender?.bank?.name || sender?.bank?.id || '';
+          senderAccountNumberToSave = sender?.account?.bank?.account || sender?.account?.proxy?.account || '';
+          setSenderName(senderNameToSave);
+          setSenderBankName(senderBankNameToSave);
+          setSenderAccountNumber(senderAccountNumberToSave);
+        } else if (result.duplicate) {
+          alert(
+            `✖ สลิปนี้ถูกใช้บันทึกแล้วในระบบ${result.duplicateInfo?.transactionNumber ? ` (เลขที่ ${result.duplicateInfo.transactionNumber})` : ''} ไม่สามารถบันทึกซ้ำได้`
+          );
+          setSubmitting(false);
+          return;
+        } else {
+          // ตรวจไม่ผ่านด้วยเหตุอื่น — ให้ผู้ใช้ตัดสินใจว่าจะบันทึกต่อหรือไม่
+          const proceed = confirm(
+            `⚠ สลิปตรวจสอบไม่ผ่าน: ${result.message || 'ไม่ทราบสาเหตุ'}\n\nต้องการบันทึกรับเงินต่อโดยไม่ผ่านการตรวจสลิปหรือไม่?`
+          );
+          if (!proceed) {
+            setSubmitting(false);
+            return;
+          }
+        }
+      }
+
+      // เลขที่อ้างอิง (Ref) จำเป็นสำหรับการโอนเงิน และห้ามซ้ำกัน (ใช้ค่าล่าสุด ไม่รอ state อัปเดต)
+      const refToSave = (slipRef || referenceNumber || '').trim();
+      if (paymentMethod === 'TRANSFER' && !refToSave) {
+        alert('กรุณาระบุเลขที่อ้างอิง (Ref) สำหรับการโอนเงิน');
         setSubmitting(false);
         return;
       }
@@ -1839,11 +2085,18 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
           amount: parseFloat(parseFloat(paymentAmount).toFixed(2)),
           paymentMethod,
           paymentDate,
-          referenceNumber,
+          referenceNumber: refToSave,
           notes,
+          // ข้อมูลผู้โอน (เติมอัตโนมัติจากสลิป — server จะบังคับใช้ค่าจาก slipData เองหากตรวจสอบผ่าน)
+          senderName: senderNameToSave || null,
+          senderBankName: senderBankNameToSave || null,
+          senderAccountNumber: senderAccountNumberToSave || null,
           // Transfer specific
           bankAccountId: paymentMethod === 'TRANSFER' ? parseInt(selectedBankAccountId) : null,
           slipUrl: uploadedSlipUrl,
+          slipRef,
+          slipStatusCode,
+          slipData,
           // Cheque specific
           chequeNumber: paymentMethod === 'CHEQUE' ? chequeNumber : null,
           chequeDate: paymentMethod === 'CHEQUE' ? chequeDate : null,
@@ -2023,6 +2276,34 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
     }
   };
 
+  // Hard delete transaction (ลบถาวรออกจาก DB จริงๆ ต่างจากยกเลิกที่แค่เปลี่ยนสถานะ)
+  const handleHardDeleteTransaction = async (transactionId: number, transactionNumber: string) => {
+    const confirmed = window.confirm(`⚠️ คุณต้องการลบธุรกรรม "${transactionNumber}" อย่างถาวรใช่หรือไม่?\n\n⛔ คำเตือน: การลบนี้ไม่สามารถกู้คืนได้! (ถ้าเคยยืนยันแล้ว ยอดชำระ/คงเหลือของใบแจ้งหนี้จะถูกปรับคืนให้อัตโนมัติ)`);
+    if (!confirmed) return;
+
+    try {
+      setHardDeletingTxId(transactionId);
+      const response = await fetch(`/api/customer-transactions/${transactionId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message || 'ลบเรียบร้อย');
+        fetchData();
+        onPaymentChange?.();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการลบ');
+    } finally {
+      setHardDeletingTxId(null);
+    }
+  };
+
   // Edit transaction
   const handleEditTransaction = (tx: any) => {
     // Store editing transaction ID
@@ -2042,6 +2323,12 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
     setChequeNumber(tx.chequeNumber || '');
     setChequeDate(tx.chequeDate?.split('T')[0] || '');
     setChequeBankId(tx.chequeBankId?.toString() || '');
+    setSenderName(tx.senderName || '');
+    setSenderBankName(tx.senderBankName || '');
+    setSenderAccountNumber(tx.senderAccountNumber || '');
+    // ถ้ารายการนี้เคยตรวจสอบสลิปผ่าน API มาแล้ว (มี slipRef/slipStatusCode) ต้องล็อก Ref/ผู้โอน ห้ามแก้ไข แม้จะแก้ไขรายการ
+    setEditingTxSlipVerified(!!(tx.slipRef || tx.slipStatusCode));
+    setSlipVerifyResult(null);
     
     // Set slip preview if exists
     if (tx.slipUrl) {
@@ -2064,14 +2351,21 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
     setNotes('');
     setRefundReason('');
     setSelectedInvoice(null);
-    // Transfer specific
-    setSelectedBankAccountId('');
+    // Transfer specific — เลือกบัญชี "หลัก" ให้อัตโนมัติถ้ามี
+    const defaultBankAccount = bankAccounts.find((a) => a.isDefault);
+    setSelectedBankAccountId(defaultBankAccount ? String(defaultBankAccount.id) : '');
     setSlipFile(null);
     setSlipPreview(null);
+    setSlipVerifyResult(null);
     // Cheque specific
     setChequeNumber('');
     setChequeDate('');
     setChequeBankId('');
+    // ข้อมูลผู้โอน
+    setSenderName('');
+    setSenderBankName('');
+    setSenderAccountNumber('');
+    setEditingTxSlipVerified(false);
     // Reset editing state
     setEditingTransactionId(null);
   };
@@ -2080,11 +2374,17 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
     const file = e.target.files?.[0];
     if (file) {
       setSlipFile(file);
+      setSlipVerifyResult(null);
       const reader = new FileReader();
       reader.onloadend = () => {
         setSlipPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // แนบสลิปแล้วตรวจสอบทันที (เฉพาะโอนเงิน + ไฟล์รูป + เปิดใช้งาน + ผู้ใช้เลือกให้ตรวจ)
+      if (checkSlipBeforeSave && slip2goEnabled && paymentMethod === 'TRANSFER' && file.type.startsWith('image/')) {
+        verifySlipNow(file);
+      }
     }
   };
 
@@ -2196,7 +2496,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
             <Button 
               size="sm" 
               className="text-xs sm:text-sm bg-green-600 hover:bg-green-700"
-              onClick={() => setShowPaymentModal(true)}
+              onClick={() => { resetForm(); setShowPaymentModal(true); }}
               disabled={payableInvoices.length === 0}
             >
               <Plus className="w-4 h-4 sm:mr-2" />
@@ -2370,6 +2670,14 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                               </button>
                             </>
                           )}
+                          <button
+                            onClick={() => handleHardDeleteTransaction(tx.id, tx.transactionNumber)}
+                            disabled={hardDeletingTxId === tx.id}
+                            className="p-1 text-red-700 hover:bg-red-100 rounded cursor-pointer disabled:opacity-50"
+                            title="ลบถาวร"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -2382,204 +2690,326 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
       </CardContent>
 
       {/* Payment Modal */}
-      {showPaymentModal && (
+      {(() => {
+        // เลขอ้างอิง/ผู้โอน ถูกล็อกห้ามแก้ไขเองเมื่อมาจากการตรวจสอบสลิปด้วย API แล้ว
+        // (ตรวจผ่านในเซสชันนี้ หรือรายการที่กำลังแก้ไขเคยตรวจสอบสลิปผ่าน API มาก่อนแล้ว)
+        const refLocked = paymentMethod === 'TRANSFER' && (slipVerifyResult?.ok === true || editingTxSlipVerified);
+        return showPaymentModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b">
               <h3 className="text-lg font-semibold">{editingTransactionId ? 'แก้ไขรับเงิน' : 'บันทึกรับเงิน'}</h3>
             </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">เลือกใบแจ้งหนี้ *</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={selectedInvoice?.id || ''}
-                  onChange={(e) => {
-                    const allInvoices = editingTransactionId && selectedInvoice && !payableInvoices.find(i => i.id === selectedInvoice.id)
-                      ? [...payableInvoices, selectedInvoice]
-                      : payableInvoices;
-                    const inv = allInvoices.find(i => i.id === parseInt(e.target.value));
-                    setSelectedInvoice(inv);
-                    if (inv) {
-                      // คงเหลือ = grandTotal - paidAmount + refundedAmount
-                      const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
-                      setPaymentAmount(balance.toFixed(2));
-                    }
-                  }}
-                >
-                  <option value="">-- เลือก --</option>
-                  {(() => {
-                    // เมื่อแก้ไข ให้รวม invoice ที่ถูกเลือกไว้เข้าไปด้วย
-                    const displayInvoices = editingTransactionId && selectedInvoice && !payableInvoices.find(i => i.id === selectedInvoice.id)
-                      ? [...payableInvoices, selectedInvoice]
-                      : payableInvoices;
-                    return displayInvoices.map(inv => {
-                      // คงเหลือ = grandTotal - paidAmount + refundedAmount
-                      const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
-                      return (
-                        <option key={inv.id} value={inv.id}>
-                          {inv.invoiceNumber} - คงเหลือ {balance.toLocaleString()} ฿
-                        </option>
-                      );
-                    });
-                  })()}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">ยอดเงิน *</label>
-                <input
-                  type="number" 
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">วิธีชำระ *</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                >
-                  <option value="CASH">เงินสด</option>
-                  <option value="TRANSFER">โอนเงิน</option>
-                  <option value="CHEQUE">เช็คธนาคาร</option>
-                  <option value="CREDIT_CARD">บัตรเครดิต</option>
-                </select>
-              </div>
 
-              {/* Conditional fields based on payment method */}
-              {paymentMethod === 'TRANSFER' && (
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* ฝั่งซ้าย: ข้อมูลการชำระเงิน */}
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">บัญชีธนาคารที่รับโอน *</label>
+                  <label className="block text-sm font-medium mb-1">เลือกใบแจ้งหนี้ *</label>
                   <select
                     className="w-full border rounded-lg px-3 py-2"
-                    value={selectedBankAccountId}
-                    onChange={(e) => setSelectedBankAccountId(e.target.value)}
+                    value={selectedInvoice?.id || ''}
+                    onChange={(e) => {
+                      const allInvoices = editingTransactionId && selectedInvoice && !payableInvoices.find(i => i.id === selectedInvoice.id)
+                        ? [...payableInvoices, selectedInvoice]
+                        : payableInvoices;
+                      const inv = allInvoices.find(i => i.id === parseInt(e.target.value));
+                      setSelectedInvoice(inv);
+                      if (inv) {
+                        // คงเหลือ = grandTotal - paidAmount + refundedAmount
+                        const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
+                        setPaymentAmount(balance.toFixed(2));
+                      }
+                    }}
                   >
-                    <option value="">-- เลือกบัญชี --</option>
-                    {bankAccounts.map(acc => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.displayName}
-                      </option>
-                    ))}
+                    <option value="">-- เลือก --</option>
+                    {(() => {
+                      // เมื่อแก้ไข ให้รวม invoice ที่ถูกเลือกไว้เข้าไปด้วย
+                      const displayInvoices = editingTransactionId && selectedInvoice && !payableInvoices.find(i => i.id === selectedInvoice.id)
+                        ? [...payableInvoices, selectedInvoice]
+                        : payableInvoices;
+                      return displayInvoices.map(inv => {
+                        // คงเหลือ = grandTotal - paidAmount + refundedAmount
+                        const balance = Math.round((parseFloat(inv.grandTotal) - parseFloat(inv.paidAmount || 0) + parseFloat(inv.refundedAmount || 0)) * 100) / 100;
+                        return (
+                          <option key={inv.id} value={inv.id}>
+                            {inv.invoiceNumber} - คงเหลือ {balance.toLocaleString()} ฿
+                          </option>
+                        );
+                      });
+                    })()}
                   </select>
                 </div>
-              )}
+                <div>
+                  <label className="block text-sm font-medium mb-1">ยอดเงิน *</label>
+                  <input
+                    type="number" 
+                    className={`w-full border rounded-lg px-3 py-2 ${refLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`}
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    readOnly={refLocked}
+                    placeholder="0.00"
+                  />
+                  {refLocked && (
+                    <p className="text-xs text-green-600 mt-1">ล็อกอัตโนมัติจากผลตรวจสอบสลิป ไม่สามารถแก้ไขเองได้</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">วิธีชำระ *</label>
+                  <select
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                  >
+                    <option value="CASH">เงินสด</option>
+                    <option value="TRANSFER">โอนเงิน</option>
+                    <option value="CHEQUE">เช็คธนาคาร</option>
+                    <option value="CREDIT_CARD">บัตรเครดิต</option>
+                  </select>
+                </div>
 
-              {paymentMethod === 'CHEQUE' && (
-                <>
+                {/* Conditional fields based on payment method */}
+                {paymentMethod === 'TRANSFER' && (
                   <div>
-                    <label className="block text-sm font-medium mb-1">ธนาคารที่ออกเช็ค *</label>
+                    <label className="block text-sm font-medium mb-1">บัญชีธนาคารที่รับโอน *</label>
                     <select
                       className="w-full border rounded-lg px-3 py-2"
-                      value={chequeBankId}
-                      onChange={(e) => setChequeBankId(e.target.value)}
+                      value={selectedBankAccountId}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setSelectedBankAccountId(value);
+                        // ไม่ต้องตรวจสอบสลิปซ้ำเมื่อเปลี่ยนบัญชีอีกต่อไป เพราะการตรวจสอบไม่ได้เช็คบัญชีผู้รับโอนที่ Slip2Go อีกต่อไปแล้ว
+                        // (ตัดcheckReceiverออกไปแล้ว) — การส่งสลิปเดิมซ้ำไปเช็คซ้ำ จะโดน Slip2Go ตีคืน "ซ้ำ/ใช้ซ้ำ" เอง (เช่น "Slip is valid." ที่จริงๆคือเจอคำเตือนซ้ำ ไม่ใช่ความหมายว่า valid จริง)
+                      }}
                     >
-                      <option value="">-- เลือกธนาคาร --</option>
-                      {banks.map(bank => (
-                        <option key={bank.id} value={bank.id}>
-                          {bank.nameTH}
+                      <option value="">-- เลือกบัญชี --</option>
+                      {bankAccounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.fullDisplayName || `${acc.displayName} - ${acc.accountNumber}`}
                         </option>
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">เลขที่เช็ค *</label>
-                    <input
-                      type="text"
-                      className="w-full border rounded-lg px-3 py-2"
-                      value={chequeNumber}
-                      onChange={(e) => setChequeNumber(e.target.value)}
-                      placeholder="เลขที่เช็ค"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">เช็คลงวันที่ *</label>
-                    <input
-                      type="date"
-                      className="w-full border rounded-lg px-3 py-2"
-                      value={chequeDate}
-                      onChange={(e) => setChequeDate(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* แนบสลิป/หลักฐาน - ใช้ได้กับทุกวิธีชำระ */}
-              <div>
-                <label className="block text-sm font-medium mb-1">แนบสลิป/หลักฐาน</label>
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  onChange={handleSlipChange}
-                />
-                {slipPreview && (
-                  <div className="mt-2">
-                    {slipFile?.type === 'application/pdf' ? (
-                      <div className="flex items-center gap-2 p-2 bg-gray-100 rounded border">
-                        <span className="text-red-600">📄</span>
-                        <span className="text-sm">{slipFile.name}</span>
-                      </div>
-                    ) : slipPreview.toLowerCase().endsWith('.pdf') ? (
-                      <a 
-                        href={slipPreview} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 p-2 bg-gray-100 rounded border text-blue-600 hover:text-blue-800"
-                      >
-                        <span className="text-red-600">📄</span>
-                        <span className="text-sm">ดูไฟล์ PDF ที่แนบไว้</span>
-                      </a>
-                    ) : (
-                      <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
-                    )}
-                  </div>
                 )}
+
+                {paymentMethod === 'CHEQUE' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">ธนาคารที่ออกเช็ค *</label>
+                      <select
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={chequeBankId}
+                        onChange={(e) => setChequeBankId(e.target.value)}
+                      >
+                        <option value="">-- เลือกธนาคาร --</option>
+                        {banks.map(bank => (
+                          <option key={bank.id} value={bank.id}>
+                            {bank.nameTH}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">เลขที่เช็ค *</label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={chequeNumber}
+                        onChange={(e) => setChequeNumber(e.target.value)}
+                        placeholder="เลขที่เช็ค"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">เช็คลงวันที่ *</label>
+                      <input
+                        type="date"
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={chequeDate}
+                        onChange={(e) => setChequeDate(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">วันที่และเวลาชำระ</label>
+                  <DateTime24Input value={paymentDate} onChange={setPaymentDate} disabled={refLocked} />
+                  {refLocked && (
+                    <p className="text-xs text-green-600 mt-1">ล็อกอัตโนมัติจากผลตรวจสอบสลิป ไม่สามารถแก้ไขเองได้</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    เลขอ้างอิง / หมายเหตุ{paymentMethod === 'TRANSFER' && <span className="text-red-500"> *</span>}
+                  </label>
+                  <input
+                    type="text"
+                    className={`w-full border rounded-lg px-3 py-2 ${refLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`}
+                    value={referenceNumber}
+                    onChange={(e) => setReferenceNumber(e.target.value)}
+                    readOnly={refLocked}
+                    placeholder={paymentMethod === 'TRANSFER' ? 'จำเป็นต้องระบุ (จะเติมอัตโนมัติหากตรวจสลิปผ่าน)' : 'เลขอ้างอิงอื่นๆ (ถ้ามี)'}
+                  />
+                  {paymentMethod === 'TRANSFER' && !refLocked && (
+                    <p className="text-xs text-gray-500 mt-1">ห้ามซ้ำกับรายการอื่น ระบบจะปฏิเสธการบันทึกหากเลขอ้างอิงถูกใช้ไปแล้ว</p>
+                  )}
+                  {refLocked && (
+                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      ล็อกอัตโนมัติจากผลตรวจสอบสลิป ไม่สามารถแก้ไขเองได้
+                    </p>
+                  )}
+                </div>
+                {paymentMethod === 'TRANSFER' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">ผู้โอน</label>
+                      <input
+                        type="text"
+                        className={`w-full border rounded-lg px-3 py-2 ${refLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`}
+                        value={senderName}
+                        onChange={(e) => setSenderName(e.target.value)}
+                        readOnly={refLocked}
+                        placeholder="ชื่อผู้โอน (จะเติมอัตโนมัติหากตรวจสลิปผ่าน)"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">ธนาคารผู้โอน</label>
+                        <input
+                          type="text"
+                          className={`w-full border rounded-lg px-3 py-2 ${refLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`}
+                          value={senderBankName}
+                          onChange={(e) => setSenderBankName(e.target.value)}
+                          readOnly={refLocked}
+                          placeholder="ชื่อธนาคารผู้โอน"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">เลขที่บัญชีผู้โอน</label>
+                        <input
+                          type="text"
+                          className={`w-full border rounded-lg px-3 py-2 ${refLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`}
+                          value={senderAccountNumber}
+                          onChange={(e) => setSenderAccountNumber(e.target.value)}
+                          readOnly={refLocked}
+                          placeholder="เลขที่บัญชีผู้โอน"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className="block text-sm font-medium mb-1">หมายเหตุ</label>
+                  <textarea
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={2}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">วันที่และเวลาชำระ</label>
-                <input
-                  type="datetime-local"
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">เลขอ้างอิง / หมายเหตุ</label>
-                <input
-                  type="text"
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={referenceNumber}
-                  onChange={(e) => setReferenceNumber(e.target.value)}
-                  placeholder="เลขอ้างอิงอื่นๆ (ถ้ามี)"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">หมายเหตุ</label>
-                <textarea
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                />
+              {/* ฝั่งขวา: แนบสลิป/หลักฐาน */}
+              <div className="space-y-4">
+                <div className="border rounded-lg p-4 bg-gray-50 h-full">
+                  <label className="block text-sm font-medium mb-2">แนบสลิป/หลักฐาน</label>
+                  <input
+                    ref={slipFileInputRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={handleSlipChange}
+                  />
+                  {slip2goEnabled && paymentMethod === 'TRANSFER' && (
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-lg">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checkSlipBeforeSave}
+                          onChange={(e) => setCheckSlipBeforeSave(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded border-gray-300"
+                        />
+                        <span className="text-xs text-blue-700">
+                          <span className="font-medium flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            ตรวจสอบสลิปอัตโนมัติผ่าน SlipAPDev ก่อนบันทึก
+                          </span>
+                          <span className="block mt-0.5 text-blue-600">
+                            รองรับเฉพาะสลิปที่มี QR Code เท่านั้น เมื่อตรวจสำเร็จระบบจะดึงเลขที่อ้างอิง (Ref)
+                            มาใส่ให้อัตโนมัติ และจะบล็อกการบันทึกหาก Ref ซ้ำกับรายการอื่น
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                  {verifyingSlip && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-blue-600 p-2 bg-blue-50 border border-blue-100 rounded-lg">
+                      <span className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      กำลังตรวจสอบสลิป...
+                    </div>
+                  )}
+                  {!verifyingSlip && slipVerifyResult?.ok && (
+                    <div className="mt-2 flex items-start gap-2 text-xs text-green-700 p-2 bg-green-50 border border-green-200 rounded-lg">
+                      <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>
+                        ตรวจสอบสลิปสำเร็จ{slipVerifyResult.slipRef ? ` — Ref: ${slipVerifyResult.slipRef}` : ''}
+                        <span className="block text-green-600">ระบบเติมเลขที่อ้างอิง/ยอดเงิน/วันที่ให้อัตโนมัติแล้ว กรุณาตรวจสอบอีกครั้งก่อนบันทึก</span>
+                      </span>
+                    </div>
+                  )}
+                  {!verifyingSlip && slipVerifyResult && !slipVerifyResult.ok && !slipVerifyResult.duplicate && (
+                    <div className="mt-2 flex items-start gap-2 text-xs text-amber-700 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                      <XCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>ตรวจสอบสลิปไม่ผ่าน: {slipVerifyResult.message}</span>
+                    </div>
+                  )}
+                  {slipPreview ? (
+                    <div className="mt-3 group relative cursor-pointer" onClick={() => slipFileInputRef.current?.click()}>
+                      {slipFile?.type === 'application/pdf' ? (
+                        <div className="flex items-center gap-2 p-2 bg-white rounded border">
+                          <span className="text-red-600">📄</span>
+                          <span className="text-sm">{slipFile.name}</span>
+                        </div>
+                      ) : slipPreview.toLowerCase().endsWith('.pdf') ? (
+                        <div className="flex items-center gap-2 p-2 bg-white rounded border text-blue-600">
+                          <span className="text-red-600">📄</span>
+                          <span className="text-sm">ดูไฟล์ PDF ที่แนบไว้</span>
+                        </div>
+                      ) : (
+                        <img src={slipPreview} alt="Preview" className="w-full max-h-80 object-contain rounded border bg-white" />
+                      )}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 rounded-lg transition-colors">
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-medium flex items-center gap-1 bg-black/60 px-3 py-1.5 rounded-full">
+                          <Upload className="w-3.5 h-3.5" />
+                          เปลี่ยนไฟล์
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className="mt-3 flex flex-col items-center justify-center py-8 text-gray-400 border border-dashed rounded-lg cursor-pointer hover:border-green-400 hover:text-green-600 hover:bg-green-50/50 transition-colors"
+                      onClick={() => slipFileInputRef.current?.click()}
+                    >
+                      <Upload className="w-8 h-8 mb-2" />
+                      <span className="text-xs">คลิกเพื่อแนบไฟล์ (ยังไม่ได้แนบไฟล์)</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className="p-4 border-t flex gap-2 justify-end">
               <Button variant="outline" onClick={() => { setShowPaymentModal(false); resetForm(); }}>
                 ยกเลิก
               </Button>
-              <Button onClick={handlePayment} disabled={submitting} className="bg-green-600 hover:bg-green-700">
-                {submitting ? 'กำลังบันทึก...' : (editingTransactionId ? 'บันทึกการแก้ไข' : 'บันทึกรับเงิน')}
+              <Button onClick={handlePayment} disabled={submitting || verifyingSlip} className="bg-green-600 hover:bg-green-700">
+                {verifyingSlip ? 'กำลังตรวจสอบสลิป...' : submitting ? 'กำลังบันทึก...' : (editingTransactionId ? 'บันทึกการแก้ไข' : 'บันทึกรับเงิน')}
               </Button>
             </div>
           </div>
         </div>
-      )}
+      );
+      })()}
 
       {/* Refund Modal */}
       {showRefundModal && (
@@ -2688,12 +3118,7 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">วันที่และเวลาคืนเงิน</label>
-                <input
-                  type="datetime-local"
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                />
+                <DateTime24Input value={paymentDate} onChange={setPaymentDate} />
               </div>
             </div>
             <div className="p-4 border-t flex gap-2 justify-end">
@@ -3393,7 +3818,9 @@ function WholesalePaymentTab({ quotation }: { quotation: any }) {
     setRefundReason('');
     setSelectedWholesaleId('');
     setWholesaleName('');
-    setSelectedBankAccountId('');
+    // เลือกบัญชี "หลัก" ให้อัตโนมัติถ้ามี
+    const defaultBankAccount = bankAccounts.find((a) => a.isDefault);
+    setSelectedBankAccountId(defaultBankAccount ? String(defaultBankAccount.id) : '');
     setToBankName('');
     setToBankAccountNo('');
     setToBankAccountName('');
@@ -3704,21 +4131,11 @@ function WholesalePaymentTab({ quotation }: { quotation: any }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium mb-1">วันที่ทำรายการ</label>
-                  <input
-                    type="datetime-local"
-                    className="w-full border rounded-lg px-3 py-2"
-                    value={transactionDate}
-                    onChange={(e) => setTransactionDate(e.target.value)}
-                  />
+                  <DateTime24Input value={transactionDate} onChange={setTransactionDate} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">วันที่ชำระ</label>
-                  <input
-                    type="datetime-local"
-                    className="w-full border rounded-lg px-3 py-2"
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                  />
+                  <DateTime24Input value={paymentDate} onChange={setPaymentDate} />
                 </div>
               </div>
               <div>
@@ -3825,21 +4242,11 @@ function WholesalePaymentTab({ quotation }: { quotation: any }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium mb-1">วันที่ทำรายการ</label>
-                  <input
-                    type="datetime-local"
-                    className="w-full border rounded-lg px-3 py-2"
-                    value={transactionDate}
-                    onChange={(e) => setTransactionDate(e.target.value)}
-                  />
+                  <DateTime24Input value={transactionDate} onChange={setTransactionDate} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">วันที่รับเงิน</label>
-                  <input
-                    type="datetime-local"
-                    className="w-full border rounded-lg px-3 py-2"
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                  />
+                  <DateTime24Input value={paymentDate} onChange={setPaymentDate} />
                 </div>
               </div>
             </div>

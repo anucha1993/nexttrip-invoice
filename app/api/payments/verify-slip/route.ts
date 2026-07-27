@@ -48,24 +48,6 @@ export async function POST(req: NextRequest) {
     const amountRaw = form.get('amount');
     const amount = amountRaw ? Number(amountRaw) : undefined;
     const amountType = (form.get('amountType') as 'eq' | 'gte' | 'lte' | null) || 'gte';
-    const bankAccountId = form.get('bankAccountId')
-      ? Number(form.get('bankAccountId'))
-      : null;
-
-    // โหลด receiver จาก bank_accounts (ถ้าระบุ)
-    let receiverAccountName: string | undefined;
-    let receiverAccountNumber: string | undefined;
-    if (bankAccountId) {
-      conn = await pool.getConnection();
-      const rows = await conn.query(
-        `SELECT accountName, accountNumber FROM bank_accounts WHERE id = ? LIMIT 1`,
-        [bankAccountId]
-      );
-      if (rows?.[0]) {
-        receiverAccountName = rows[0].accountName || undefined;
-        receiverAccountNumber = rows[0].accountNumber || undefined;
-      }
-    }
 
     const svc = await Slip2goService.fromSettings();
     if (!svc.isConfigured) {
@@ -75,11 +57,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ไม่ส่ง receiverAccountName/receiverAccountNumber ให้ Slip2Go ตรวจ (checkReceiver) อีกต่อไป
+    // เพราะการเทียบชื่อ/เลขบัญชีฝั่ง API เข้มเกินไป ทำให้ false-positive "Recipient Account Not Match"
+    // บ่อย — ให้ระบบของเราควบคุมเองแทน (ผู้ใช้เลือกบัญชีรับโอนเองจาก dropdown ที่โชว์เลขบัญชีชัดเจนอยู่แล้ว)
     const result = await svc.verifyByImage(file, filename, {
       amount: amount && !Number.isNaN(amount) ? amount : undefined,
       amountType,
-      receiverAccountName,
-      receiverAccountNumber,
     });
 
     if (String(result.code) !== '200000') {

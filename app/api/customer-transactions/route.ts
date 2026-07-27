@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { generateDocumentNumber } from '@/lib/helpers/document-number';
+import { LineOaService } from '@/lib/services/line-oa';
 
 // GET /api/customer-transactions - List transactions
 export async function GET(request: NextRequest) {
@@ -138,6 +139,14 @@ export async function POST(request: NextRequest) {
       chequeNumber,
       chequeDate,
       chequeBankId,
+      // Slip2Go verification result
+      slipRef,
+      slipStatusCode,
+      slipData,
+      // ข้อมูลผู้โอน (ปกติเติมอัตโนมัติจาก slipData.sender — ยึด slipData เป็นหลักด้านล่าง)
+      senderName,
+      senderBankName,
+      senderAccountNumber,
     } = body;
     
     // Round amount to 2 decimal places to avoid floating point precision issues
@@ -145,6 +154,17 @@ export async function POST(request: NextRequest) {
     
     // Ensure autoConfirm is boolean
     const autoConfirm = rawAutoConfirm === true || rawAutoConfirm === 'true';
+    
+    // เลขที่อ้างอิง (Ref) - ตัดช่องว่างหัวท้าย
+    const referenceNumberTrimmed = typeof referenceNumber === 'string' ? referenceNumber.trim() : referenceNumber;
+
+    // ความปลอดภัย: หากมีการตรวจสอบสลิปผ่าน API แล้ว (มี slipData) ให้ "บังคับ" ใช้ข้อมูล
+    // เลขที่อ้างอิง/ผู้โอน จาก slipData เท่านั้น ห้ามใช้ค่าที่ client ส่งมาแยกต่างหาก (ป้องกันการปลอมแปลง/แก้ไขเอง)
+    const sd: any = slipData || null;
+    const finalReferenceNumber = sd ? (slipRef || referenceNumberTrimmed) : referenceNumberTrimmed;
+    const finalSenderName = sd ? (sd.sender?.account?.name || null) : (senderName || null);
+    const finalSenderBankName = sd ? (sd.sender?.bank?.name || sd.sender?.bank?.id || null) : (senderBankName || null);
+    const finalSenderAccountNumber = sd ? (sd.sender?.account?.bank?.account || sd.sender?.account?.proxy?.account || null) : (senderAccountNumber || null);
     
     // Validate required fields
     if (!transactionType || !['PAYMENT', 'REFUND'].includes(transactionType)) {
@@ -172,9 +192,10 @@ export async function POST(request: NextRequest) {
     const invoices = await connection.query(
       `SELECT i.id, i.invoiceNumber, i.grandTotal, i.paidAmount, i.refundedAmount, 
               i.quotationId, i.status,
-              q.quotationNumber 
+              q.quotationNumber, c.name as customerName
        FROM invoices i 
        LEFT JOIN quotations q ON i.quotationId = q.id
+       LEFT JOIN customers c ON q.customerId = c.id
        WHERE i.id = ?`,
       [invoiceId]
     );
@@ -218,6 +239,26 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // Ref (เลขที่อ้างอิง) จำเป็นสำหรับการรับเงินผ่านโอนเงิน และห้ามซ้ำกับรายการอื่นเด็ดขาด
+    if (transactionType === 'PAYMENT' && (paymentMethod || 'TRANSFER') === 'TRANSFER') {
+      if (!finalReferenceNumber) {
+        return NextResponse.json(
+          { error: 'กรุณาระบุเลขที่อ้างอิง (Ref) สำหรับการโอนเงิน' },
+          { status: 400 }
+        );
+      }
+      const dupRef = await connection.query(
+        `SELECT id, transactionNumber FROM customer_transactions WHERE referenceNumber = ? AND status != 'CANCELLED' LIMIT 1`,
+        [finalReferenceNumber]
+      );
+      if (dupRef?.[0]) {
+        return NextResponse.json(
+          { error: `เลขที่อ้างอิง (Ref) "${finalReferenceNumber}" ถูกใช้ไปแล้ว (รายการ ${dupRef[0].transactionNumber})` },
+          { status: 409 }
+        );
+      }
+    }
+    
     // Generate transaction number
     const docType = transactionType === 'PAYMENT' ? 'PAYMENT' : 'REFUND';
     const transactionNumber = await generateDocumentNumber(docType, connection);
@@ -232,12 +273,13 @@ export async function POST(request: NextRequest) {
       `INSERT INTO customer_transactions (
         transactionNumber, transactionType, invoiceId, quotationId,
         amount, paymentMethod, paymentDate,
-        slipUrl, slipUploadedAt, referenceNumber, bankAccount,
+        slipUrl, slipUploadedAt, slipRef, slipStatusCode, slipVerifiedAt, slipData,
+        referenceNumber, senderName, senderBankName, senderAccountNumber, bankAccount,
         bankAccountId, chequeNumber, chequeDate, chequeBankId,
         refundReason, originalTransactionId,
         status, confirmedAt, confirmedById, confirmedByName,
         notes, createdById, createdByName
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNumber,
         transactionType,
@@ -248,7 +290,14 @@ export async function POST(request: NextRequest) {
         paymentDate || new Date().toISOString().split('T')[0],
         slipUrl || null,
         slipUrl ? new Date() : null,
-        referenceNumber || null,
+        slipRef || null,
+        slipStatusCode || null,
+        slipRef ? new Date() : null,
+        slipData ? JSON.stringify(slipData) : null,
+        finalReferenceNumber || null,
+        finalSenderName,
+        finalSenderBankName,
+        finalSenderAccountNumber,
         bankAccount || null,
         bankAccountId || null,
         chequeNumber || null,
@@ -347,6 +396,29 @@ export async function POST(request: NextRequest) {
     }
     
     await connection.commit();
+    
+    // ส่งต่อสลิปไปยัง LINE OA แบบ best-effort (ไม่กระทบผลการบันทึก) — ทำทุกครั้งที่มีการแนบสลิป
+    if (slipUrl) {
+      try {
+        const lineSvc = await LineOaService.fromSettings();
+        const lineCfg = await LineOaService.loadConfig();
+        if (lineCfg.enabled && lineSvc.isConfigured) {
+          const text = LineOaService.buildSlipText({
+            transactionType,
+            transactionNumber,
+            amount,
+            referenceNumber: referenceNumberTrimmed || null,
+            customerName: invoice.customerName || null,
+            quotationNumber: invoice.quotationNumber || null,
+            invoiceNumber: invoice.invoiceNumber || null,
+            notes: notes || null,
+          });
+          await lineSvc.pushSlipNotification({ imageUrl: slipUrl, text });
+        }
+      } catch (lineErr) {
+        console.error('LINE OA forward slip failed:', lineErr);
+      }
+    }
     
     return NextResponse.json({
       success: true,

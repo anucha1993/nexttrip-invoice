@@ -16,9 +16,11 @@ export interface Slip2goVerifyOptions {
 }
 
 export interface Slip2goReceiver {
-  displayName?: string;
-  name?: string;
-  account?: { value?: string };
+  account?: {
+    name?: string;
+    bank?: { account?: string };
+    proxy?: { type?: string; account?: string };
+  };
   bank?: { id?: string; name?: string };
 }
 
@@ -106,7 +108,29 @@ export class Slip2goService {
     if (!this.isConfigured) {
       return { code: 'error', message: 'Slip2Go API ยังไม่ได้ตั้งค่า Secret Key' };
     }
+    return this.callVerify(file, filename, opts);
+  }
 
+  /**
+   * เรียก Slip2Go จริง — แยกไว้เพื่อ retry ได้เองเมื่อเจอ "duplicate ฝั่ง Slip2Go" (checkDuplicate)
+   *
+   * Slip2Go มี duplicate-check 2 ระดับที่ต้องแยกกัน:
+   *   1) checkDuplicate ฝั่ง Slip2Go เอง (payload.checkDuplicate) — จะ conflict ถ้าสลิปใบเดียวกัน
+   *      (QR/transRef เดิม) ถูกส่งเข้ามาเช็คซ้ำ "ทาง API" อีกครั้ง เช่น ผู้ใช้แนบสลิปแล้วเปลี่ยนบัญชี
+   *      ธนาคารที่รับโอน ทำให้ต้องยิงเช็คซ้ำเพื่อตรวจ receiver ใหม่ — นี่ไม่ใช่การ "ใช้ซ้ำ" จริง
+   *      แค่ตรวจซ้ำ ไม่ควรบล็อกผู้ใช้
+   *   2) การเช็คใน DB ของเราเอง (customer_transactions.slipRef) ว่าสลิปนี้ถูก "บันทึก" ไปแล้วหรือยัง
+   *      (ทำใน app/api/payments/verify-slip/route.ts) — อันนี้คือของจริงที่ต้องบล็อก
+   *
+   * ดังนั้นถ้า Slip2Go ตอบ conflict จาก (1) ให้ retry อีกครั้งโดยปิด checkDuplicate เพื่อเอาข้อมูลสลิปจริง
+   * มาใช้ แล้วปล่อยให้ (2) เป็นตัวตัดสินเรื่องซ้ำแทน
+   */
+  private async callVerify(
+    file: Blob,
+    filename: string,
+    opts: Slip2goVerifyOptions,
+    isRetryWithoutDuplicateCheck = false
+  ): Promise<Slip2goResponse> {
     const payload: Record<string, unknown> = {};
     const useDuplicate = opts.checkDuplicate ?? this.checkDuplicateDefault;
     if (useDuplicate) payload.checkDuplicate = true;
@@ -140,6 +164,17 @@ export class Slip2goService {
         body: form,
       });
       const json = (await res.json()) as Slip2goResponse;
+
+      // Slip2Go ตอบ "duplicate ฝั่งตัวเอง" ได้หลายคำ ทั้ง 409 conflict และข้อความ
+      // "Slip is Duplicated." (code 200 ปกติ แต่ message ระบุซ้ำ) — ต้องจับทั้งคู่
+      const isApiSideDuplicateConflict =
+        useDuplicate &&
+        !isRetryWithoutDuplicateCheck &&
+        (res.status === 409 || /conflict|duplicat/i.test(json?.message || ''));
+      if (isApiSideDuplicateConflict) {
+        return this.callVerify(file, filename, { ...opts, checkDuplicate: false }, true);
+      }
+
       return json;
     } catch (err) {
       return {

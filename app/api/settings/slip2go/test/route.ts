@@ -16,7 +16,9 @@ export async function POST() {
       );
     }
     const result = await svc.getAccountInfo();
-    const ok = String(result.code) === '200000';
+    const code = String(result.code);
+    // account/info สำเร็จคืนค่า 200001 (verify-slip คืนค่า 200000) — รับทั้งสองกันพลาด
+    const ok = code === '200001' || code === '200000';
     return NextResponse.json({ ok, result });
   } catch (e) {
     if (e instanceof Response) return e;

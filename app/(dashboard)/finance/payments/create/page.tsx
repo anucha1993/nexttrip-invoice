@@ -12,7 +12,8 @@ import {
   Loader2,
   CheckCircle,
   Building2,
-  Upload
+  Upload,
+  ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -95,10 +96,12 @@ export default function CreatePaymentPage() {
   // Slip upload
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
+  const [slip2goEnabled, setSlip2goEnabled] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
     fetchBanksAndAccounts();
+    fetchSlip2goStatus();
     setPaymentDate(getLocalDateTimeString());
   }, []);
 
@@ -184,6 +187,18 @@ export default function CreatePaymentPage() {
     }
   };
 
+  const fetchSlip2goStatus = async () => {
+    try {
+      const res = await fetch('/api/settings/slip2go');
+      if (res.ok) {
+        const data = await res.json();
+        setSlip2goEnabled(!!data.enabled && !!data.hasSecretKey);
+      }
+    } catch {
+      // โหลดสถานะไม่ได้ → ถือว่าไม่เปิดใช้งานตรวจสลิป
+    }
+  };
+
   const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -230,6 +245,46 @@ export default function CreatePaymentPage() {
     setSubmitting(true);
 
     try {
+      // ตรวจสอบสลิปด้วย Slip2Go ก่อนบันทึก (เฉพาะโอนเงิน + ไฟล์รูป + เปิดใช้งาน)
+      let slipRef: string | null = null;
+      let slipStatusCode: string | null = null;
+      let slipData: unknown = null;
+      const isImageSlip = !!slipFile && slipFile.type.startsWith('image/');
+      if (slip2goEnabled && isImageSlip && paymentMethod === 'TRANSFER') {
+        const vfd = new FormData();
+        vfd.append('file', slipFile as File);
+        vfd.append('amount', String(amount));
+        vfd.append('amountType', 'gte');
+        if (selectedBankAccountId) vfd.append('bankAccountId', selectedBankAccountId);
+
+        const vres = await fetch('/api/payments/verify-slip', { method: 'POST', body: vfd });
+        const v = await vres.json();
+
+        if (vres.ok && v.ok) {
+          slipRef = v.slip?.slipRef ?? null;
+          slipStatusCode = v.slip?.slipStatusCode ?? null;
+          slipData = v.slip?.slipData ?? null;
+          if (slipRef) setReferenceNumber(slipRef);
+        } else if (v.code === 'duplicate_local') {
+          // สลิปซ้ำ — บล็อคทันที กันบันทึกซ้ำ
+          const dup = v.duplicate;
+          alert(
+            `✖ สลิปนี้ถูกใช้บันทึกแล้วในระบบ${dup?.transactionNumber ? ` (เลขที่ ${dup.transactionNumber})` : ''} ไม่สามารถบันทึกซ้ำได้`
+          );
+          setSubmitting(false);
+          return;
+        } else {
+          // ตรวจไม่ผ่านด้วยเหตุอื่น — ให้ผู้ใช้ตัดสินใจว่าจะบันทึกต่อหรือไม่
+          const proceed = confirm(
+            `⚠ สลิปตรวจสอบไม่ผ่าน: ${v.message || v.error || 'ไม่ทราบสาเหตุ'}\n\nต้องการบันทึกรับเงินต่อโดยไม่ผ่านการตรวจสลิปหรือไม่?`
+          );
+          if (!proceed) {
+            setSubmitting(false);
+            return;
+          }
+        }
+      }
+
       // Upload slip if exists
       let slipUrl = null;
       if (slipFile) {
@@ -259,7 +314,10 @@ export default function CreatePaymentPage() {
           paymentMethod,
           paymentDate,
           slipUrl,
-          referenceNumber,
+          slipRef,
+          slipStatusCode,
+          slipData,
+          referenceNumber: slipRef || referenceNumber,
           notes,
           bankAccountId: selectedBankAccountId || null,
           chequeNumber: paymentMethod === 'CHEQUE' ? chequeNumber : null,
@@ -555,6 +613,12 @@ export default function CreatePaymentPage() {
                     className="w-full border rounded-lg px-3 py-2 text-sm"
                     onChange={handleSlipChange}
                   />
+                  {slip2goEnabled && paymentMethod === 'TRANSFER' && (
+                    <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      ระบบจะตรวจสอบสลิปอัตโนมัติผ่าน SlipAPDev ก่อนบันทึก (รองรับเฉพาะไฟล์รูปที่มี QR Code เท่านั้น)
+                    </p>
+                  )}
                   {slipPreview && (
                     <div className="mt-2">
                       {slipFile?.type === 'application/pdf' ? (
@@ -570,12 +634,17 @@ export default function CreatePaymentPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">เลขอ้างอิง</label>
+                  <label className="block text-sm font-medium mb-1">
+                    เลขอ้างอิง{paymentMethod === 'TRANSFER' && <span className="text-red-500"> *</span>}
+                  </label>
                   <Input
                     value={referenceNumber}
                     onChange={(e) => setReferenceNumber(e.target.value)}
-                    placeholder="เลขอ้างอิง (ถ้ามี)"
+                    placeholder={paymentMethod === 'TRANSFER' ? 'จำเป็นต้องระบุ (จะเติมอัตโนมัติหากตรวจสลิปผ่าน)' : 'เลขอ้างอิง (ถ้ามี)'}
                   />
+                  {paymentMethod === 'TRANSFER' && (
+                    <p className="text-xs text-gray-500 mt-1">ห้ามซ้ำกับรายการอื่น ระบบจะปฏิเสธการบันทึกหากเลขอ้างอิงถูกใช้ไปแล้ว</p>
+                  )}
                 </div>
 
                 <div>

@@ -15,8 +15,9 @@ const KEYS = [
 
 function maskSecret(s: string) {
   if (!s) return '';
-  if (s.length <= 8) return '••••';
-  return `${s.slice(0, 4)}••••${s.slice(-4)}`;
+  // ปกปิดทั้งหมด โชว์เฉพาะ 4 ตัวท้ายไว้ให้ผู้ใช้จำได้ว่าเป็นคีย์ไหน
+  const tail = s.length > 6 ? s.slice(-4) : '';
+  return `${'*'.repeat(24)}${tail}`;
 }
 
 export async function GET() {
@@ -44,8 +45,13 @@ export async function PUT(req: NextRequest) {
 
     const patch: Record<string, string> = {};
     if (typeof body.apiUrl === 'string') patch.slip2go_api_url = body.apiUrl.trim();
-    // อัปเดต secret เฉพาะเมื่อผู้ใช้ส่งค่าใหม่มา (ไม่ทับด้วยค่า mask)
-    if (typeof body.secretKey === 'string' && body.secretKey && !body.secretKey.includes('••')) {
+    // อัปเดต secret เฉพาะเมื่อผู้ใช้ส่งค่าใหม่มา (ไม่ทับด้วยค่า mask ที่เป็น ****)
+    if (
+      typeof body.secretKey === 'string' &&
+      body.secretKey &&
+      !body.secretKey.startsWith('*') &&
+      !body.secretKey.includes('••')
+    ) {
       patch.slip2go_secret_key = body.secretKey.trim();
     }
     if (typeof body.checkDuplicate === 'boolean')

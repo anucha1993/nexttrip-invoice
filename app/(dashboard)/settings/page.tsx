@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { User, Building, CreditCard, Bell, Shield, Palette } from 'lucide-react';
+import { User, Building, CreditCard, Bell, Shield, Palette, ShieldCheck, MessageCircle, Landmark } from 'lucide-react';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('company');
@@ -46,6 +47,27 @@ export default function SettingsPage() {
                   <span className="font-medium">{tab.label}</span>
                 </button>
               ))}
+              <Link
+                href="/settings/bank-accounts"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <Landmark className="w-5 h-5" />
+                <span className="font-medium">บัญชีธนาคาร</span>
+              </Link>
+              <Link
+                href="/settings/slip2go"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <ShieldCheck className="w-5 h-5" />
+                <span className="font-medium">ตรวจสลิป (SlipAPDev)</span>
+              </Link>
+              <Link
+                href="/settings/line-oa"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <MessageCircle className="w-5 h-5" />
+                <span className="font-medium">ส่งต่อสลิป (LINE OA)</span>
+              </Link>
             </nav>
           </Card>
         </div>

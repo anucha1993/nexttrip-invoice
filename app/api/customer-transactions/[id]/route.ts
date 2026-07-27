@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { generateDocumentNumber } from '@/lib/helpers/document-number';
+import { LineOaService } from '@/lib/services/line-oa';
 
 // GET /api/customer-transactions/[id] - Get single transaction
 export async function GET(
@@ -76,6 +77,102 @@ export async function GET(
   }
 }
 
+// DELETE /api/customer-transactions/[id] - Hard delete (ลบถาวรออกจาก DB จริงๆ)
+// ต่างจาก PATCH action=cancel (ยกเลิก/soft delete) ที่แค่เปลี่ยนสถานะเป็น CANCELLED แล้วยังอยู่ในตาราง
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  let connection;
+
+  try {
+    const { id } = await params;
+    const transactionId = parseInt(id);
+
+    if (isNaN(transactionId)) {
+      return NextResponse.json(
+        { error: 'Invalid transaction ID' },
+        { status: 400 }
+      );
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const transactions = await connection.query(
+      `SELECT ct.*, i.grandTotal, i.paidAmount, i.refundedAmount
+       FROM customer_transactions ct
+       LEFT JOIN invoices i ON ct.invoiceId = i.id
+       WHERE ct.id = ?`,
+      [transactionId]
+    );
+
+    if (!transactions || transactions.length === 0) {
+      await connection.rollback();
+      return NextResponse.json(
+        { error: 'ไม่พบธุรกรรม' },
+        { status: 404 }
+      );
+    }
+
+    const transaction = transactions[0];
+
+    // ถ้าธุรกรรมนี้เคยยืนยันแล้ว (มีผลต่อยอดใน invoice) ต้อง reverse ยอดก่อนลบถาวร
+    // มิฉะนั้นยอดชำระ/คงเหลือของ invoice จะผิดหลังลบ
+    if (transaction.status === 'CONFIRMED') {
+      const amount = parseFloat(transaction.amount);
+      const invoiceId = transaction.invoiceId;
+
+      if (transaction.transactionType === 'PAYMENT') {
+        await connection.query(
+          `UPDATE invoices SET 
+            paidAmount = GREATEST(COALESCE(paidAmount, 0) - ?, 0),
+            status = CASE 
+              WHEN GREATEST(COALESCE(paidAmount, 0) - ?, 0) <= 0 THEN 'ISSUED'
+              WHEN GREATEST(COALESCE(paidAmount, 0) - ?, 0) < grandTotal THEN 'PARTIAL_PAID'
+              ELSE status
+            END,
+            updatedAt = NOW()
+           WHERE id = ?`,
+          [amount, amount, amount, invoiceId]
+        );
+      } else {
+        await connection.query(
+          `UPDATE invoices SET 
+            refundedAmount = GREATEST(COALESCE(refundedAmount, 0) - ?, 0),
+            updatedAt = NOW()
+           WHERE id = ?`,
+          [amount, invoiceId]
+        );
+      }
+    }
+
+    // ลบเอกสารที่ผูกกับ transaction นี้ก่อน (receipts/credit_notes มี FK ON DELETE RESTRICT)
+    await connection.query(`DELETE FROM receipts WHERE transactionId = ?`, [transactionId]);
+    await connection.query(`DELETE FROM credit_notes WHERE transactionId = ?`, [transactionId]);
+
+    // ลบ transaction จริง
+    await connection.query(`DELETE FROM customer_transactions WHERE id = ?`, [transactionId]);
+
+    await connection.commit();
+
+    return NextResponse.json({
+      success: true,
+      message: 'ลบธุรกรรมเรียบร้อยแล้ว (ถาวร)',
+    });
+
+  } catch (error: any) {
+    if (connection) await connection.rollback();
+    console.error('Error hard-deleting transaction:', error);
+    return NextResponse.json(
+      { error: 'เกิดข้อผิดพลาดในการลบ', details: error.message },
+      { status: 500 }
+    );
+  } finally {
+    if (connection) connection.release();
+  }
+}
+
 // PATCH /api/customer-transactions/[id] - Confirm transaction (and issue document)
 export async function PATCH(
   request: NextRequest,
@@ -102,9 +199,12 @@ export async function PATCH(
 
     // Get transaction
     const transactions = await connection.query(
-      `SELECT ct.*, i.grandTotal, i.paidAmount, i.refundedAmount
+      `SELECT ct.*, i.grandTotal, i.paidAmount, i.refundedAmount, i.invoiceNumber,
+              q.quotationNumber, c.name as customerName
        FROM customer_transactions ct
        LEFT JOIN invoices i ON ct.invoiceId = i.id
+       LEFT JOIN quotations q ON i.quotationId = q.id
+       LEFT JOIN customers c ON q.customerId = c.id
        WHERE ct.id = ?`,
       [transactionId]
     );
@@ -287,6 +387,28 @@ export async function PATCH(
 
       await connection.commit();
 
+      // แจ้งเตือน LINE OA แบบ best-effort — ส่งทุกครั้งที่ยกเลิกรายการ
+      try {
+        const lineSvc = await LineOaService.fromSettings();
+        const lineCfg = await LineOaService.loadConfig();
+        if (lineCfg.enabled && lineSvc.isConfigured) {
+          const text = LineOaService.buildSlipText({
+            transactionType: transaction.transactionType,
+            transactionNumber: transaction.transactionNumber,
+            amount: parseFloat(transaction.amount),
+            referenceNumber: transaction.referenceNumber || null,
+            customerName: transaction.customerName || null,
+            quotationNumber: transaction.quotationNumber || null,
+            invoiceNumber: transaction.invoiceNumber || null,
+            notes: transaction.notes || null,
+            action: 'CANCEL',
+          });
+          await lineSvc.pushSlipNotification({ imageUrl: transaction.slipUrl || '', text });
+        }
+      } catch (lineErr) {
+        console.error('LINE OA cancel notification failed:', lineErr);
+      }
+
       return NextResponse.json({
         success: true,
         message: 'ยกเลิกธุรกรรมเรียบร้อย',
@@ -341,22 +463,35 @@ export async function PUT(
       chequeDate,
       chequeBankId,
       slipUrl,
+      slipRef,
+      slipStatusCode,
+      slipData,
       updatedById,
       updatedByName,
       confirmOnSlip,  // Flag to confirm when slip is attached
+      // ข้อมูลผู้โอน (ปกติเติมอัตโนมัติจาก slipData.sender)
+      senderName,
+      senderBankName,
+      senderAccountNumber,
     } = body;
     
     // Round amount to 2 decimal places to avoid floating point precision issues
     const amount = Math.round(parseFloat(rawAmount) * 100) / 100;
+
+    // เลขที่อ้างอิง (Ref) - ตัดช่องว่างหัวท้าย
+    const referenceNumberTrimmed = typeof referenceNumber === 'string' ? referenceNumber.trim() : referenceNumber;
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
     // Get current transaction
     const transactions = await connection.query(
-      `SELECT ct.*, i.grandTotal, i.paidAmount, i.refundedAmount
+      `SELECT ct.*, i.grandTotal, i.paidAmount, i.refundedAmount, i.invoiceNumber,
+              q.quotationNumber, c.name as customerName
        FROM customer_transactions ct
        LEFT JOIN invoices i ON ct.invoiceId = i.id
+       LEFT JOIN quotations q ON i.quotationId = q.id
+       LEFT JOIN customers c ON q.customerId = c.id
        WHERE ct.id = ?`,
       [transactionId]
     );
@@ -373,6 +508,54 @@ export async function PUT(
     const newAmount = amount;  // Already a number from rounding above
     const amountDiff = newAmount - oldAmount;
 
+    // ความปลอดภัย: รายการที่เคยตรวจสอบสลิปผ่าน API มาแล้ว (มี slipRef/slipStatusCode เดิม) ต้อง "ล็อก"
+    // เลขที่อ้างอิง/ผู้โอน ห้ามแก้ไขผ่านการ Edit อีก แม้ client จะส่งค่าอื่นมาก็ตาม (ยกเว้นกรณีตรวจสอบสลิปใหม่ในคำขอนี้)
+    const wasAlreadyApiVerified = !!(oldTransaction.slipRef || oldTransaction.slipStatusCode);
+    const sd: any = slipData || null;
+    let finalReferenceNumber: string | null;
+    let finalSenderName: string | null;
+    let finalSenderBankName: string | null;
+    let finalSenderAccountNumber: string | null;
+    if (sd) {
+      // มีการตรวจสอบสลิปใหม่มาพร้อมคำขอนี้ — ใช้ข้อมูลจากผลตรวจสอบเสมอ
+      finalReferenceNumber = slipRef || referenceNumberTrimmed || null;
+      finalSenderName = sd.sender?.account?.name || null;
+      finalSenderBankName = sd.sender?.bank?.name || sd.sender?.bank?.id || null;
+      finalSenderAccountNumber = sd.sender?.account?.bank?.account || sd.sender?.account?.proxy?.account || null;
+    } else if (wasAlreadyApiVerified) {
+      // เคยตรวจสอบผ่าน API มาก่อนแล้ว และคำขอนี้ไม่ได้แนบผลตรวจสอบใหม่ — คงค่าเดิมไว้ ห้ามแก้ไข
+      finalReferenceNumber = oldTransaction.referenceNumber;
+      finalSenderName = oldTransaction.senderName;
+      finalSenderBankName = oldTransaction.senderBankName;
+      finalSenderAccountNumber = oldTransaction.senderAccountNumber;
+    } else {
+      // ไม่เคยตรวจสอบผ่าน API — กรอกเองได้ตามปกติ
+      finalReferenceNumber = referenceNumberTrimmed || null;
+      finalSenderName = senderName || null;
+      finalSenderBankName = senderBankName || null;
+      finalSenderAccountNumber = senderAccountNumber || null;
+    }
+
+    // Ref (เลขที่อ้างอิง) จำเป็นสำหรับการรับเงินผ่านโอนเงิน และห้ามซ้ำกับรายการอื่นเด็ดขาด
+    if (oldTransaction.transactionType === 'PAYMENT' && (paymentMethod || 'TRANSFER') === 'TRANSFER') {
+      if (!finalReferenceNumber) {
+        return NextResponse.json(
+          { error: 'กรุณาระบุเลขที่อ้างอิง (Ref) สำหรับการโอนเงิน' },
+          { status: 400 }
+        );
+      }
+      const dupRef = await connection.query(
+        `SELECT id, transactionNumber FROM customer_transactions WHERE referenceNumber = ? AND status != 'CANCELLED' AND id != ? LIMIT 1`,
+        [finalReferenceNumber, transactionId]
+      );
+      if (dupRef?.[0]) {
+        return NextResponse.json(
+          { error: `เลขที่อ้างอิง (Ref) "${finalReferenceNumber}" ถูกใช้ไปแล้ว (รายการ ${dupRef[0].transactionNumber})` },
+          { status: 409 }
+        );
+      }
+    }
+
     // Check if we should auto-confirm (PENDING + slip attached)
     const shouldAutoConfirm = oldTransaction.status === 'PENDING' && slipUrl && confirmOnSlip;
 
@@ -383,6 +566,9 @@ export async function PUT(
         paymentMethod = ?,
         paymentDate = ?,
         referenceNumber = ?,
+        senderName = ?,
+        senderBankName = ?,
+        senderAccountNumber = ?,
         notes = ?,
         refundReason = ?,
         bankAccountId = ?,
@@ -391,6 +577,10 @@ export async function PUT(
         chequeBankId = ?,
         slipUrl = COALESCE(?, slipUrl),
         slipUploadedAt = CASE WHEN ? IS NOT NULL THEN NOW() ELSE slipUploadedAt END,
+        slipRef = COALESCE(?, slipRef),
+        slipStatusCode = COALESCE(?, slipStatusCode),
+        slipVerifiedAt = CASE WHEN ? IS NOT NULL THEN NOW() ELSE slipVerifiedAt END,
+        slipData = COALESCE(?, slipData),
         status = CASE WHEN ? = 1 THEN 'CONFIRMED' ELSE status END,
         confirmedAt = CASE WHEN ? = 1 THEN NOW() ELSE confirmedAt END,
         confirmedById = CASE WHEN ? = 1 THEN ? ELSE confirmedById END,
@@ -403,7 +593,10 @@ export async function PUT(
         newAmount,
         paymentMethod,
         paymentDate,
-        referenceNumber || null,
+        finalReferenceNumber,
+        finalSenderName,
+        finalSenderBankName,
+        finalSenderAccountNumber,
         notes || null,
         refundReason || null,
         bankAccountId || null,
@@ -412,6 +605,10 @@ export async function PUT(
         chequeBankId || null,
         slipUrl || null,
         slipUrl || null,
+        slipRef || null,
+        slipStatusCode || null,
+        slipRef || null,
+        slipData ? JSON.stringify(slipData) : null,
         shouldAutoConfirm ? 1 : 0,
         shouldAutoConfirm ? 1 : 0,
         shouldAutoConfirm ? 1 : 0, updatedById || null,
@@ -549,6 +746,28 @@ export async function PUT(
     }
 
     await connection.commit();
+
+    // แจ้งเตือน LINE OA แบบ best-effort — ส่งทุกครั้งที่มีการแก้ไขรายการ (แนบรูปสลิปถ้ามี ไม่ว่าจะเพิ่งอัปโหลดใหม่หรือมีอยู่เดิม)
+    try {
+      const lineSvc = await LineOaService.fromSettings();
+      const lineCfg = await LineOaService.loadConfig();
+      if (lineCfg.enabled && lineSvc.isConfigured) {
+        const text = LineOaService.buildSlipText({
+          transactionType: oldTransaction.transactionType,
+          transactionNumber: oldTransaction.transactionNumber,
+          amount: newAmount,
+          referenceNumber: referenceNumberTrimmed || null,
+          customerName: oldTransaction.customerName || null,
+          quotationNumber: oldTransaction.quotationNumber || null,
+          invoiceNumber: oldTransaction.invoiceNumber || null,
+          notes: notes || null,
+          action: 'EDIT',
+        });
+        await lineSvc.pushSlipNotification({ imageUrl: slipUrl || oldTransaction.slipUrl || '', text });
+      }
+    } catch (lineErr) {
+      console.error('LINE OA edit notification failed:', lineErr);
+    }
 
     return NextResponse.json({
       success: true,

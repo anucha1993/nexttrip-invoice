@@ -18,6 +18,57 @@ interface Slip2goSettings {
   enabled: boolean;
 }
 
+interface AccountInfo {
+  shopName?: string;
+  package?: string;
+  packageExpiredDate?: string;
+  tokenLimit?: number;
+  tokenRemaining?: number;
+  creditRemaining?: number;
+  quotaQrLimit?: number;
+  quotaQrRemaining?: number;
+  tokenPerSlip?: number;
+  estimatedQuotaSlip?: number;
+}
+
+function AccountInfoCard({ info }: { info: AccountInfo }) {
+  const fmtDate = (d?: string) => {
+    if (!d) return '-';
+    const dt = new Date(d);
+    return isNaN(dt.getTime())
+      ? d
+      : dt.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+  const rows: { label: string; value: string }[] = [
+    { label: 'บัญชี', value: info.shopName || '-' },
+    { label: 'แพ็กเกจ', value: info.package || '-' },
+    { label: 'หมดอายุ', value: fmtDate(info.packageExpiredDate) },
+    {
+      label: 'โทเคนคงเหลือ',
+      value: info.tokenRemaining != null ? `${info.tokenRemaining} / ${info.tokenLimit ?? '-'}` : '-',
+    },
+    { label: 'เครดิตคงเหลือ', value: info.creditRemaining != null ? String(info.creditRemaining) : '-' },
+    {
+      label: 'โควตา QR',
+      value: info.quotaQrRemaining != null ? `${info.quotaQrRemaining} / ${info.quotaQrLimit ?? '-'}` : '-',
+    },
+    {
+      label: 'ตรวจได้อีกประมาณ',
+      value: info.estimatedQuotaSlip != null ? `${info.estimatedQuotaSlip} สลิป` : '-',
+    },
+  ];
+  return (
+    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-white/70 p-3 rounded border border-green-100">
+      {rows.map((r) => (
+        <div key={r.label} className="flex justify-between gap-2">
+          <span className="text-gray-500">{r.label}</span>
+          <span className="font-medium text-gray-800">{r.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Slip2goSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -154,9 +205,9 @@ export default function Slip2goSettingsPage() {
             <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg shadow-blue-500/25">
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
-            ตั้งค่า Slip2Go
+            ตั้งค่า SlipAPDev
           </h1>
-          <p className="text-gray-500 mt-1">ระบบตรวจสอบสลิปโอนเงินอัตโนมัติผ่าน Slip2Go API</p>
+          <p className="text-gray-500 mt-1">ระบบตรวจสอบสลิปโอนเงินอัตโนมัติผ่าน SlipAPDev API</p>
         </div>
       </div>
 
@@ -171,25 +222,10 @@ export default function Slip2goSettingsPage() {
             <CardHeader>
               <h3 className="text-lg font-semibold text-gray-900">การเชื่อมต่อ API</h3>
               <p className="text-sm text-gray-500">
-                ขอ Secret Key ได้ที่{' '}
-                <a
-                  href="https://connect.slip2go.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  connect.slip2go.com
-                </a>
+                กรอก Secret Key ที่ได้รับจากผู้ให้บริการ SlipAPDev
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Input
-                label="API URL"
-                value={apiUrl}
-                onChange={(e) => setApiUrl(e.target.value)}
-                placeholder="https://connect.slip2go.com"
-              />
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Secret Key</label>
                 <div className="relative">
@@ -198,6 +234,12 @@ export default function Slip2goSettingsPage() {
                     value={secretKey}
                     onChange={(e) => setSecretKey(e.target.value)}
                     placeholder={secretPlaceholder || 'กรอก Secret Key'}
+                    autoComplete="new-password"
+                    name="slip2go-secret-key"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
+                    spellCheck={false}
                   />
                   <button
                     type="button"
@@ -219,7 +261,7 @@ export default function Slip2goSettingsPage() {
                   onChange={(e) => setEnabled(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300"
                 />
-                <span className="text-sm text-gray-700">เปิดใช้งาน Slip2Go</span>
+                <span className="text-sm text-gray-700">เปิดใช้งาน SlipAPDev</span>
               </label>
 
               <label className="flex items-center gap-3 cursor-pointer">
@@ -260,11 +302,15 @@ export default function Slip2goSettingsPage() {
                   )}
                   <div className="flex-1">
                     <div className="font-medium">{testResult.message}</div>
-                    {testResult.data ? (
-                      <pre className="mt-2 text-xs bg-white/60 p-2 rounded overflow-auto max-h-40">
-                        {JSON.stringify(testResult.data, null, 2)}
-                      </pre>
-                    ) : null}
+                    {(() => {
+                      const info = (testResult.data as { data?: AccountInfo } | undefined)?.data;
+                      if (testResult.ok && info) return <AccountInfoCard info={info} />;
+                      return testResult.data ? (
+                        <pre className="mt-2 text-xs bg-white/60 p-2 rounded overflow-auto max-h-40">
+                          {JSON.stringify(testResult.data, null, 2)}
+                        </pre>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
               )}
