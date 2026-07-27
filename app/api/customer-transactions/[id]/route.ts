@@ -100,9 +100,12 @@ export async function DELETE(
     await connection.beginTransaction();
 
     const transactions = await connection.query(
-      `SELECT ct.*, i.grandTotal, i.paidAmount, i.refundedAmount
+      `SELECT ct.*, i.grandTotal, i.paidAmount, i.refundedAmount, i.invoiceNumber,
+              q.quotationNumber, c.name as customerName
        FROM customer_transactions ct
        LEFT JOIN invoices i ON ct.invoiceId = i.id
+       LEFT JOIN quotations q ON i.quotationId = q.id
+       LEFT JOIN customers c ON q.customerId = c.id
        WHERE ct.id = ?`,
       [transactionId]
     );
@@ -155,6 +158,28 @@ export async function DELETE(
     await connection.query(`DELETE FROM customer_transactions WHERE id = ?`, [transactionId]);
 
     await connection.commit();
+
+    // แจ้งเตือน LINE OA แบบ best-effort — ส่งทุกครั้งที่ลบรายการถาวร (ข้อความเท่านั้น ไม่แนบรูป)
+    try {
+      const lineSvc = await LineOaService.fromSettings();
+      const lineCfg = await LineOaService.loadConfig();
+      if (lineCfg.enabled && lineSvc.isConfigured) {
+        const text = LineOaService.buildSlipText({
+          transactionType: transaction.transactionType,
+          transactionNumber: transaction.transactionNumber,
+          amount: parseFloat(transaction.amount),
+          referenceNumber: transaction.referenceNumber || null,
+          customerName: transaction.customerName || null,
+          quotationNumber: transaction.quotationNumber || null,
+          invoiceNumber: transaction.invoiceNumber || null,
+          notes: transaction.notes || null,
+          action: 'DELETE',
+        });
+        await lineSvc.pushSlipNotification({ imageUrl: '', text });
+      }
+    } catch (lineErr) {
+      console.error('LINE OA delete notification failed:', lineErr);
+    }
 
     return NextResponse.json({
       success: true,

@@ -166,8 +166,8 @@ export class LineOaService {
     quotationNumber?: string | null;
     invoiceNumber?: string | null;
     notes?: string | null;
-    /** CREATE = แจ้งรับชำระ/แจ้งคืนเงิน (ค่าเริ่มต้น), EDIT = แก้ไขรายการ, CANCEL = ยกเลิกรายการ */
-    action?: 'CREATE' | 'EDIT' | 'CANCEL';
+    /** CREATE = แจ้งรับชำระ/แจ้งคืนเงิน (ค่าเริ่มต้น), EDIT = แก้ไขรายการ, CANCEL = ยกเลิกรายการ, DELETE = ลบรายการถาวร */
+    action?: 'CREATE' | 'EDIT' | 'CANCEL' | 'DELETE';
   }): string {
     const isRefund = params.transactionType === 'REFUND';
     let emoji = '📎';
@@ -178,6 +178,9 @@ export class LineOaService {
     } else if (params.action === 'CANCEL') {
       emoji = '❌';
       label = isRefund ? 'ยกเลิกรายการคืนเงิน' : 'ยกเลิกรายการรับชำระเงิน';
+    } else if (params.action === 'DELETE') {
+      emoji = '🗑️';
+      label = isRefund ? 'ลบรายการคืนเงิน (ถาวร)' : 'ลบรายการรับชำระเงิน (ถาวร)';
     }
     const lines = [
       `${emoji} ${label}`,
