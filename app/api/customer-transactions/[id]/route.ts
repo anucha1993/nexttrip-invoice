@@ -403,7 +403,8 @@ export async function PATCH(
             notes: transaction.notes || null,
             action: 'CANCEL',
           });
-          await lineSvc.pushSlipNotification({ imageUrl: transaction.slipUrl || '', text });
+          // ยกเลิกรายการ: ส่งเฉพาะข้อความ ไม่แนบรูปสลิป (รูปส่งเฉพาะตอนเพิ่มรายการใหม่เท่านั้น)
+          await lineSvc.pushSlipNotification({ imageUrl: '', text });
         }
       } catch (lineErr) {
         console.error('LINE OA cancel notification failed:', lineErr);
@@ -763,7 +764,8 @@ export async function PUT(
           notes: notes || null,
           action: 'EDIT',
         });
-        await lineSvc.pushSlipNotification({ imageUrl: slipUrl || oldTransaction.slipUrl || '', text });
+        // แก้ไขรายการ: ส่งเฉพาะข้อความ ไม่แนบรูปสลิป (รูปส่งเฉพาะตอนเพิ่มรายการใหม่เท่านั้น)
+        await lineSvc.pushSlipNotification({ imageUrl: '', text });
       }
     } catch (lineErr) {
       console.error('LINE OA edit notification failed:', lineErr);
