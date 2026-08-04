@@ -1,16 +1,30 @@
 'use client';
 
-import { useState, useEffect, use, useMemo, useCallback } from 'react';
+import { useState, useEffect, use, useMemo, useCallback, ComponentProps } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Card, CardHeader as CardHeaderBase, CardContent as CardContentBase } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Input as InputBase } from '@/components/ui/input';
+import { SearchableSelect as SearchableSelectBase } from '@/components/ui/searchable-select';
 import { 
-  ArrowLeft, Save, Plus, Trash2, CheckCircle, AlertCircle, DollarSign 
+  ArrowLeft, Save, Plus, Trash2, CheckCircle, AlertCircle, DollarSign, Plane, FileText
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCurrentUser } from '@/contexts/AuthContext';
+
+// Compact density by default for this field-dense page (matches quotation-form.tsx pattern).
+const CardHeader = (props: ComponentProps<typeof CardHeaderBase>) => (
+  <CardHeaderBase padding="sm" {...props} />
+);
+const CardContent = (props: ComponentProps<typeof CardContentBase>) => (
+  <CardContentBase padding="sm" {...props} />
+);
+const Input = (props: ComponentProps<typeof InputBase>) => (
+  <InputBase uiSize="sm" {...props} />
+);
+const SearchableSelect = (props: ComponentProps<typeof SearchableSelectBase>) => (
+  <SearchableSelectBase uiSize="sm" {...props} />
+);
 
 interface InvoiceItem {
   id?: number;
@@ -32,6 +46,34 @@ interface Product {
   includePax: boolean;
 }
 
+interface Sale {
+  id: number;
+  name: string;
+}
+
+interface Wholesale {
+  id: number;
+  nameTh: string;
+  code?: string;
+}
+
+interface Airline {
+  id: number;
+  name: string;
+  code?: string;
+}
+
+interface Country {
+  id: number;
+  nameTh: string;
+  code?: string;
+}
+
+interface NumDay {
+  id: number;
+  name: string;
+}
+
 export default function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
@@ -46,6 +88,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   const [quotationId, setQuotationId] = useState<number | null>(null);
   const [quotationNumber, setQuotationNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerTaxId, setCustomerTaxId] = useState('');
   const [pax, setPax] = useState(1);
   const [invoiceDate, setInvoiceDate] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -61,6 +105,21 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
 
+  // Tour info - ข้อมูลนี้จริงๆ อยู่ที่ Quotation แต่แก้ไขได้จากหน้า Invoice ด้วย
+  const [tourName, setTourName] = useState('');
+  const [ntCode, setNtCode] = useState('');
+  const [customTourCode, setCustomTourCode] = useState('');
+  const [countryId, setCountryId] = useState('');
+  const [airlineId, setAirlineId] = useState('');
+  const [wholesaleId, setWholesaleId] = useState('');
+  const [saleId, setSaleId] = useState('');
+  const [numDaysValue, setNumDaysValue] = useState('');
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [wholesales, setWholesales] = useState<Wholesale[]>([]);
+  const [airlines, setAirlines] = useState<Airline[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [numDaysList, setNumDaysList] = useState<NumDay[]>([]);
+
   // Fetch invoice data
   const fetchInvoice = useCallback(async () => {
     try {
@@ -73,6 +132,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
         setQuotationId(invoice.quotationId);
         setQuotationNumber(invoice.quotationNumber || '');
         setCustomerName(invoice.customerName || '');
+        setCustomerAddress(invoice.customerAddress || '');
+        setCustomerTaxId(invoice.customerTaxId || '');
         setPax(invoice.pax || 1);
         setInvoiceDate(invoice.invoiceDate?.split('T')[0] || '');
         setDueDate(invoice.dueDate?.split('T')[0] || '');
@@ -118,10 +179,57 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  // Fetch tour info from the linked quotation (ntCode, country, airline, wholesale, sale, numDays ฯลฯ)
+  const fetchQuotationTourInfo = useCallback(async (qId: number) => {
+    try {
+      const res = await fetch(`/api/quotations/${qId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTourName(data.tourName || '');
+        setNtCode(data.ntCode || '');
+        setCustomTourCode(data.customTourCode || '');
+        setCountryId(data.countryId?.toString() || '');
+        setAirlineId(data.airlineId?.toString() || '');
+        setWholesaleId(data.wholesaleId?.toString() || '');
+        setSaleId(data.saleId?.toString() || '');
+        setNumDaysValue(data.numDays?.toString() || '');
+      }
+    } catch (error) {
+      console.error('Error fetching quotation tour info:', error);
+    }
+  }, []);
+
+  // Fetch master data for the tour info dropdowns
+  const fetchTourMasterData = async () => {
+    try {
+      const [salesRes, wholesalesRes, airlinesRes, countriesRes, numDaysRes] = await Promise.all([
+        fetch('/api/sales'),
+        fetch('/api/wholesales'),
+        fetch('/api/airlines'),
+        fetch('/api/countries'),
+        fetch('/api/num-days'),
+      ]);
+      if (salesRes.ok) setSales(await salesRes.json());
+      if (wholesalesRes.ok) setWholesales(await wholesalesRes.json());
+      if (airlinesRes.ok) setAirlines(await airlinesRes.json());
+      if (countriesRes.ok) setCountries(await countriesRes.json());
+      if (numDaysRes.ok) setNumDaysList(await numDaysRes.json());
+    } catch (error) {
+      console.error('Error fetching tour master data:', error);
+    }
+  };
+
   useEffect(() => {
     fetchInvoice();
     fetchProducts();
+    fetchTourMasterData();
   }, [fetchInvoice]);
+
+  useEffect(() => {
+    if (quotationId) {
+      fetchQuotationTourInfo(quotationId);
+    }
+  }, [quotationId, fetchQuotationTourInfo]);
 
   // Add item
   const addItem = (type: 'INCOME' | 'DISCOUNT' = 'INCOME') => {
@@ -309,15 +417,41 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
         body: JSON.stringify(payload),
       });
 
-      if (response.ok) {
-        setSuccessMessage('บันทึกใบแจ้งหนี้สำเร็จ!');
-        setTimeout(() => {
-          router.push(`/quotations/${quotationId}/dashboard?tab=invoice`);
-        }, 1500);
-      } else {
+      if (!response.ok) {
         const data = await response.json();
         setError(data.error || 'เกิดข้อผิดพลาดในการบันทึก');
+        return;
       }
+
+      // ข้อมูลทัวร์ (tourName, ntCode, country/airline/wholesale/sale, numDays)
+      // จริงๆ อยู่ที่ Quotation ที่ผูกกับ Invoice นี้ - อัปเดตไปพร้อมกัน
+      if (quotationId) {
+        const tourInfoResponse = await fetch(`/api/quotations/${quotationId}/tour-info`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tourName,
+            ntCode: ntCode || null,
+            customTourCode: customTourCode || null,
+            countryId: countryId || null,
+            airlineId: airlineId || null,
+            wholesaleId: wholesaleId || null,
+            saleId: saleId || null,
+            numDays: numDaysValue || null,
+          }),
+        });
+
+        if (!tourInfoResponse.ok) {
+          const data = await tourInfoResponse.json().catch(() => ({}));
+          setError(data.error || 'บันทึกใบแจ้งหนี้สำเร็จ แต่บันทึกข้อมูลทัวร์ไม่สำเร็จ');
+          return;
+        }
+      }
+
+      setSuccessMessage('บันทึกใบแจ้งหนี้สำเร็จ!');
+      setTimeout(() => {
+        router.push(`/quotations/${quotationId}/dashboard?tab=invoice`);
+      }, 1500);
     } catch (error: any) {
       setError(error.message || 'เกิดข้อผิดพลาดในการบันทึก');
     } finally {
@@ -373,42 +507,61 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left Column - Invoice Info & Items */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4">
+            {/* ข้อมูลเอกสาร - รหัส/ข้อมูลที่ระบบเติมให้อัตโนมัติ ไม่ต้องกรอกเอง */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 font-semibold text-sm">
+                    <FileText className="w-4 h-4" />
+                    ข้อมูลเอกสาร
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span>เลขที่ใบแจ้งหนี้ : <span className="font-mono font-semibold text-gray-700">{invoiceNumber || '-'}</span></span>
+                    <span>ใบเสนอราคา : <span className="font-mono font-semibold text-gray-700">{quotationNumber || '-'}</span></span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <dl className="flex flex-wrap gap-x-10 gap-y-3 text-sm">
+                  <div>
+                    <dt className="text-[11px] text-gray-500">ลูกค้า</dt>
+                    <dd className="font-semibold text-gray-900 mt-0.5">{customerName || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] text-gray-500">PAX</dt>
+                    <dd className="font-mono font-semibold text-gray-900 mt-0.5">{pax || 0}</dd>
+                  </div>
+                  {customerTaxId && (
+                    <div>
+                      <dt className="text-[11px] text-gray-500">เลขผู้เสียภาษี</dt>
+                      <dd className="font-mono font-semibold text-gray-900 mt-0.5">{customerTaxId}</dd>
+                    </div>
+                  )}
+                  {customerAddress && (
+                    <div className="w-full">
+                      <dt className="text-[11px] text-gray-500">ที่อยู่ลูกค้า</dt>
+                      <dd className="text-gray-700 mt-0.5 leading-relaxed">{customerAddress}</dd>
+                    </div>
+                  )}
+                </dl>
+              </CardContent>
+            </Card>
+
             {/* Invoice Info */}
             <Card>
               <CardHeader>
-                <h2 className="text-lg font-semibold">ข้อมูลใบแจ้งหนี้</h2>
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <FileText className="w-4 h-4" />
+                  กำหนดการของใบแจ้งหนี้
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">เลขที่ใบแจ้งหนี้</label>
-                    <Input value={invoiceNumber} disabled className="bg-gray-50" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">ใบเสนอราคา</label>
-                    <Input value={quotationNumber} disabled className="bg-gray-50" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">ลูกค้า</label>
-                    <Input value={customerName} disabled className="bg-gray-50" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">จำนวน Pax</label>
-                    <Input 
-                      type="number" 
-                      value={pax} 
-                      disabled
-                      className="bg-gray-50"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">คำนวณจากรายการที่มี (PAX)</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">วันที่ออกใบแจ้งหนี้ *</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">วันที่ออกใบแจ้งหนี้ *</label>
                     <Input 
                       type="date" 
                       value={invoiceDate} 
@@ -417,7 +570,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">กำหนดชำระ *</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">กำหนดชำระ *</label>
                     <Input 
                       type="date" 
                       value={dueDate} 
@@ -426,11 +579,11 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">สถานะ</label>
                     <select 
                       value={status}
                       onChange={(e) => setStatus(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
                     >
                       <option value="DRAFT">ฉบับร่าง</option>
                       <option value="ISSUED">ออกแล้ว</option>
@@ -443,12 +596,110 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
               </CardContent>
             </Card>
 
+            {/* Tour Info - ข้อมูลนี้จริงๆ อยู่ที่ Quotation แต่แก้ไขได้จากหน้า Invoice ด้วย */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 font-semibold text-sm">
+                    <Plane className="w-4 h-4" />
+                    ข้อมูลทัวร์
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span>รหัส NT : <span className="font-mono font-semibold text-gray-700">{ntCode || '-'}</span></span>
+                    <span>รหัสทัวร์กำหนดเอง : <span className="font-mono font-semibold text-gray-700">{customTourCode || '-'}</span></span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">ชื่อแพ็คเกจทัวร์</label>
+                  <Input
+                    value={tourName}
+                    onChange={(e) => setTourName(e.target.value)}
+                    placeholder="เช่น ทัวร์ญี่ปุ่น โตเกียว ฟูจิ 5 วัน"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">ประเทศ</label>
+                    <SearchableSelect
+                      value={countryId}
+                      onChange={setCountryId}
+                      placeholder="-- เลือกประเทศ --"
+                      options={countries.map(country => ({
+                        value: country.id.toString(),
+                        label: country.nameTh,
+                        subLabel: country.code,
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">โฮลเซลล์</label>
+                    <SearchableSelect
+                      value={wholesaleId}
+                      onChange={setWholesaleId}
+                      placeholder="-- เลือกโฮลเซลล์ --"
+                      options={wholesales.map(wholesale => ({
+                        value: wholesale.id.toString(),
+                        label: wholesale.nameTh,
+                        subLabel: wholesale.code,
+                      }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">สายการบิน</label>
+                    <SearchableSelect
+                      value={airlineId}
+                      onChange={setAirlineId}
+                      placeholder="-- เลือกสายการบิน --"
+                      options={airlines.map(airline => ({
+                        value: airline.id.toString(),
+                        label: airline.name,
+                        subLabel: airline.code,
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">พนักงานขาย</label>
+                    <SearchableSelect
+                      value={saleId}
+                      onChange={setSaleId}
+                      placeholder="-- เลือกพนักงานขาย --"
+                      options={sales.map(sale => ({
+                        value: sale.id.toString(),
+                        label: sale.name,
+                      }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">จำนวนวัน</label>
+                    <SearchableSelect
+                      value={numDaysValue}
+                      onChange={setNumDaysValue}
+                      placeholder="-- เลือกจำนวนวัน --"
+                      options={numDaysList.map(nd => ({
+                        value: nd.id.toString(),
+                        label: nd.name,
+                      }))}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Items - รายได้ */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-semibold text-green-600">
-                    <DollarSign className="w-5 h-5" />
+                  <div className="flex items-center gap-2 font-semibold text-sm text-green-600">
+                    <DollarSign className="w-4 h-4" />
                     รายได้ / ค่าบริการ
                   </div>
                   <Button type="button" size="sm" onClick={() => addItem('INCOME')}>
@@ -553,8 +804,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-semibold text-red-600">
-                    <DollarSign className="w-5 h-5" />
+                  <div className="flex items-center gap-2 font-semibold text-sm text-red-600">
+                    <DollarSign className="w-4 h-4" />
                     ส่วนลด
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => addItem('DISCOUNT')}>
@@ -645,13 +896,13 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
          {/* Notes */}
         <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold">หมายเหตุ</h2>
+            <h2 className="text-sm font-semibold">หมายเหตุ</h2>
           </CardHeader>
           <CardContent>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
               rows={3}
               placeholder="หมายเหตุเพิ่มเติม..."
             />
@@ -661,16 +912,16 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
           </div>
 
           {/* Right Column - VAT Settings, Summary, Notes */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* VAT Settings */}
             <Card>
               <CardHeader>
-                <h2 className="text-lg font-semibold">การคำนวณภาษี</h2>
+                <h2 className="text-sm font-semibold">การคำนวณภาษี</h2>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-2">VAT Mode:</label>
+                    <label className="text-xs font-medium text-gray-700 block mb-1.5">VAT Mode:</label>
                     <div className="flex gap-4">
                       <label className="flex items-center gap-2">
                         <input
@@ -705,7 +956,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
              {/* Deposit Amount */}
             <Card>
               <CardHeader>
-                <h2 className="text-lg font-semibold text-purple-700">หักเงินมัดจำ / Deposit</h2>
+                <h2 className="text-sm font-semibold text-purple-700">หักเงินมัดจำ / Deposit</h2>
               </CardHeader>
               <CardContent>
                 <Input 
@@ -727,7 +978,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
         {/* Summary */}
         <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold flex items-center gap-2">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
               <span className="text-green-600">$</span>
               สรุปยอด
             </h2>

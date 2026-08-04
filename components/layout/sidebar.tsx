@@ -24,6 +24,7 @@ import {
   UserCog,
   Shield,
   ShoppingBag,
+  ClipboardList,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -47,6 +48,7 @@ const menuItems: MenuItem[] = [
     icon: ShoppingCart,
     label: 'งานขาย',
     subItems: [
+      { label: 'จาก Booking', href: '/quotations/from-booking', icon: ClipboardList },
       { label: 'ใบเสนอราคาทัังหมด', href: '/quotations', icon: FileCheck },
       { label: 'ใบเสนอราคารออนุมัติ', href: '/sales/quotations/pending', icon: FileClock },
       { label: 'ใบเสนอราคายกเลิก', href: '/sales/quotations/cancelled', icon: FileX },
@@ -98,6 +100,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+  const [pendingBookingCount, setPendingBookingCount] = useState<number | null>(null);
 
   const toggleSubmenu = (label: string) => {
     setExpandedMenus((prev) =>
@@ -107,17 +110,45 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     );
   };
 
+  // หา href ที่ตรงกับ path ปัจจุบันแบบเจาะจงที่สุด กัน active พร้อมกันหลายเมนู
+  // (เช่น '/quotations/from-booking' เข้าเงื่อนไข prefix ของ '/quotations' ด้วย)
+  const allHrefs: string[] = [];
+  menuItems.forEach((item) => {
+    if (item.href) allHrefs.push(item.href);
+    item.subItems?.forEach((sub) => allHrefs.push(sub.href));
+  });
+
+  const activeHref = allHrefs.reduce<string | null>((best, href) => {
+    const matches = pathname === href || pathname?.startsWith(href + '/');
+    if (!matches) return best;
+    if (!best || href.length > best.length) return href;
+    return best;
+  }, null);
+
   const isMenuActive = (item: MenuItem) => {
     if (item.href) {
-      return pathname === item.href || pathname?.startsWith(item.href + '/');
+      return item.href === activeHref;
     }
     if (item.subItems) {
-      return item.subItems.some(
-        (sub) => pathname === sub.href || pathname?.startsWith(sub.href + '/')
-      );
+      return item.subItems.some((sub) => sub.href === activeHref);
     }
     return false;
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/quotations?pendingBookingReview=1&limit=1')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.pagination) {
+          setPendingBookingCount(data.pagination.total);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   const handleLinkClick = () => {
     // Close sidebar on mobile when clicking a link
@@ -234,20 +265,29 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               {hasSubItems && !collapsed && isExpanded && (
                 <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-3">
                   {item.subItems?.map((subItem) => {
-                    const isSubActive = pathname === subItem.href || pathname?.startsWith(subItem.href + '/');
+                    const isSubActive = subItem.href === activeHref;
+                    const badgeCount =
+                      subItem.href === '/quotations/from-booking' ? pendingBookingCount : null;
                     return (
                       <Link
                         key={subItem.href}
                         href={subItem.href}
                         onClick={handleLinkClick}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                           isSubActive
                             ? 'bg-blue-50 text-blue-600 font-medium'
                             : 'text-gray-600 hover:bg-gray-100'
                         }`}
                       >
-                        {subItem.icon && <subItem.icon className="w-4 h-4" />}
-                        <span>{subItem.label}</span>
+                        <span className="flex items-center gap-2">
+                          {subItem.icon && <subItem.icon className="w-4 h-4" />}
+                          <span>{subItem.label}</span>
+                        </span>
+                        {!!badgeCount && badgeCount > 0 && (
+                          <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-xs font-semibold">
+                            {badgeCount}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

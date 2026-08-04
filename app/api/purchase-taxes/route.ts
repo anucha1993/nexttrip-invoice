@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { markChecklistAuto } from '@/lib/checklist-auto';
 
 // GET: List purchase taxes for a quotation
 export async function GET(request: NextRequest) {
@@ -108,6 +109,13 @@ export async function POST(request: NextRequest) {
       LEFT JOIN user_accounts u ON pt.createdBy = u.id
       WHERE pt.id = ?
     `, [insertId]);
+
+    // Auto-check the matching Tracking-system checklist items:
+    // item 11 (ติดตามใบภาษีซื้อ) always, item 16 (ออกใบหัก ณ ที่จ่ายให้โฮลเซลล์) only if withheld.
+    await markChecklistAuto(Number(quotationId), 'PURCHASE_TAX_RECORDED', { sourceRef: `purchase_tax:${insertId}` });
+    if (hasWithholdingTax) {
+      await markChecklistAuto(Number(quotationId), 'WHT_ISSUED_TO_WHOLESALER', { sourceRef: `purchase_tax:${insertId}` });
+    }
 
     return NextResponse.json((newRecords as any[])[0], { status: 201 });
   } catch (error) {

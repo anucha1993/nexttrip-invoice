@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { requireAuth } from '@/lib/api-auth';
+import { fetchSales } from '@/lib/services/tour-api';
 
 // GET - List quotations with pagination and search
 export async function GET(request: NextRequest) {
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const customerId = searchParams.get('customerId') || '';
+    const pendingBookingReview = searchParams.get('pendingBookingReview') === '1';
     const offset = (page - 1) * limit;
 
     console.log('🔍 Query params:', { page, limit, search, status, customerId });
@@ -44,6 +46,14 @@ export async function GET(request: NextRequest) {
       params.push(customerId);
     }
 
+    if (pendingBookingReview) {
+      // Dedicated "จาก Booking (รอตรวจสอบ)" page — show ONLY unreviewed booking-origin quotations
+      whereClause += ` AND q.bookingSyncStatus = 'PENDING_REVIEW'`;
+    } else {
+      // Main quotations list — keep Booking-origin drafts OUT until a human reviews/converts them
+      whereClause += ` AND (q.bookingSyncStatus IS NULL OR q.bookingSyncStatus != 'PENDING_REVIEW')`;
+    }
+
     // Count total
     const countQuery = `
       SELECT COUNT(*) as total 
@@ -61,6 +71,8 @@ export async function GET(request: NextRequest) {
         q.quotationNumber,
         q.tourName,
         q.bookingCode,
+        q.bookingId,
+        q.bookingSyncStatus,
         q.ntCode,
         q.customTourCode,
         q.departureDate,
@@ -121,6 +133,17 @@ export async function GET(request: NextRequest) {
 
     console.log('📊 Query results:', { totalRows: rows.length, total, page, limit });
 
+    // ดึงชื่อ Sale แบบ batch ครั้งเดียว (ไม่ยิงทีละแถว) แล้ว map ด้วย saleId
+    let saleNameById = new Map<number, string>();
+    try {
+      const sales = await fetchSales();
+      saleNameById = new Map(
+        sales.filter((s) => s.id !== null).map((s) => [s.id as number, s.name])
+      );
+    } catch (err) {
+      console.error('⚠️ Failed to fetch sales list for saleName lookup:', err);
+    }
+
     // คำนวณ paymentStatus ที่ถูกต้องจาก totalPaid - totalRefunded
     const processedRows = rows.map((row: any) => {
       const grandTotal = parseFloat(row.grandTotal) || 0;
@@ -145,6 +168,7 @@ export async function GET(request: NextRequest) {
         totalRefunded: totalRefunded,
         netPaid: netPaid,
         paymentStatus: calculatedPaymentStatus,
+        saleName: row.saleId ? saleNameById.get(Number(row.saleId)) || null : null,
       };
     });
 
@@ -225,7 +249,7 @@ export async function POST(request: NextRequest) {
     // Insert quotation (id is auto-increment)
     const result = await conn.query(
       `INSERT INTO quotations (
-        quotationNumber, customerId, tourName, bookingCode, ntCode, customTourCode,
+        quotationNumber, customerId, tourName, bookingCode, ntCode, customTourCode, tourType,
         countryId, airlineId, wholesaleId, departureDate, returnDate,
         numDays, paxCount, saleId, quotationDate, validUntil,
         depositDueDate, depositAmount, fullPaymentDueDate, fullPaymentAmount,
@@ -234,7 +258,7 @@ export async function POST(request: NextRequest) {
         status, paymentStatus, notes, createdById,
         vatMode, preVatAmount, includeVatAmount, netPayable, noCost,
         createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [
         quotationNumber,
         body.customerId,
@@ -242,6 +266,7 @@ export async function POST(request: NextRequest) {
         body.bookingCode || null,
         body.ntCode || null,
         body.customTourCode || null,
+        ['NORMAL', 'PROMOTION', 'FLASH_SALE'].includes(body.tourType) ? body.tourType : 'NORMAL',
         countryId,
         airlineId,
         wholesaleId,

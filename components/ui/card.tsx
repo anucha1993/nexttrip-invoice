@@ -2,6 +2,21 @@ import { HTMLAttributes, forwardRef } from 'react';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {}
 
+interface CardSectionProps extends HTMLAttributes<HTMLDivElement> {
+  /** Visual density. 'sm' tightens padding for compact, field-dense forms. Defaults to 'md' (unchanged behavior). */
+  padding?: 'sm' | 'md';
+}
+
+const headerPaddingClasses = {
+  sm: 'px-4 py-2.5',
+  md: 'px-6 py-4',
+};
+
+const contentPaddingClasses = {
+  sm: 'px-4 py-3',
+  md: 'px-6 py-4',
+};
+
 const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ className = '', children, ...props }, ref) => {
     return (
@@ -18,12 +33,12 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
 
 Card.displayName = 'Card';
 
-const CardHeader = forwardRef<HTMLDivElement, CardProps>(
-  ({ className = '', children, ...props }, ref) => {
+const CardHeader = forwardRef<HTMLDivElement, CardSectionProps>(
+  ({ className = '', children, padding = 'md', ...props }, ref) => {
     return (
       <div
         ref={ref}
-        className={`px-6 py-4 border-b border-gray-300 ${className}`}
+        className={`${headerPaddingClasses[padding]} border-b border-gray-300 ${className}`}
         {...props}
       >
         {children}
@@ -34,12 +49,12 @@ const CardHeader = forwardRef<HTMLDivElement, CardProps>(
 
 CardHeader.displayName = 'CardHeader';
 
-const CardContent = forwardRef<HTMLDivElement, CardProps>(
-  ({ className = '', children, ...props }, ref) => {
+const CardContent = forwardRef<HTMLDivElement, CardSectionProps>(
+  ({ className = '', children, padding = 'md', ...props }, ref) => {
     return (
       <div
         ref={ref}
-        className={`px-6 py-4 ${className}`}
+        className={`${contentPaddingClasses[padding]} ${className}`}
         {...props}
       >
         {children}

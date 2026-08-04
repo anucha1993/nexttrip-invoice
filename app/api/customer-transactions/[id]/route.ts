@@ -6,6 +6,7 @@ import pool from '@/lib/db';
 import { generateDocumentNumber } from '@/lib/helpers/document-number';
 import { LineOaService } from '@/lib/services/line-oa';
 import { getSlipUsage, formatSlipUsageList } from '@/lib/helpers/slip-usage';
+import { markChecklistAuto } from '@/lib/checklist-auto';
 
 // GET /api/customer-transactions/[id] - Get single transaction
 export async function GET(
@@ -347,6 +348,12 @@ export async function PATCH(
       }
 
       await connection.commit();
+
+      if (transaction.transactionType === 'REFUND') {
+        await markChecklistAuto(Number(quotationId), 'CUSTOMER_REFUND_CONFIRMED', {
+          sourceRef: `customer_transaction:${transactionId}`,
+        });
+      }
 
       return NextResponse.json({
         success: true,

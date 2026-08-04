@@ -8,10 +8,11 @@ import {
   ArrowLeft, Pencil, FileText, Calendar, Users, DollarSign,
   Receipt, Wallet, ShoppingCart, TrendingUp, FileCheck, Upload, 
   ListChecks, PackageCheck, Plus, Eye, CheckCircle, Clock, Download,
-  Printer, XCircle, Trash2, ChevronDown, ChevronRight, User, CreditCard, ShieldCheck
+  Printer, XCircle, Trash2, ChevronDown, ChevronRight, User, CreditCard, ShieldCheck, Zap, Mail, Link2
 } from 'lucide-react';
 import Link from 'next/link';
 import InvoiceModal from '@/components/invoices/invoice-modal';
+import QuillEditor from '@/components/ui/quill-editor';
 import { useCurrentUser } from '@/contexts/AuthContext';
 
 export default function QuotationDashboardPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +25,8 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceRefreshKey, setInvoiceRefreshKey] = useState(0);
   const [paymentRefreshKey, setPaymentRefreshKey] = useState(0);
+  const [commissionStatus, setCommissionStatus] = useState<{ paid: boolean; ready: boolean } | null>(null);
+  const [savingCommission, setSavingCommission] = useState(false);
 
   // อัพเดท URL เมื่อเปลี่ยน tab
   const handleTabChange = (tabId: string) => {
@@ -33,6 +36,7 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
 
   useEffect(() => {
     fetchQuotation();
+    fetchCommissionStatus();
   }, []);
 
   const fetchQuotation = async () => {
@@ -46,6 +50,39 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
       console.error('Error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCommissionStatus = async () => {
+    try {
+      const response = await fetch(`/api/quotations/${resolvedParams.id}/checklist`);
+      if (response.ok) {
+        const data = await response.json();
+        setCommissionStatus({ paid: !!data.commission?.paid, ready: !!data.commission?.ready });
+      }
+    } catch (error) {
+      console.error('Error fetching commission status:', error);
+    }
+  };
+
+  const handleSetCommissionPaid = async (paid: boolean) => {
+    setSavingCommission(true);
+    try {
+      const res = await fetch(`/api/quotations/${resolvedParams.id}/commission-paid`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commissionPaid: paid }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'ดำเนินการไม่สำเร็จ');
+      } else {
+        await fetchCommissionStatus();
+      }
+    } catch (error) {
+      console.error('Error updating commission-paid:', error);
+    } finally {
+      setSavingCommission(false);
     }
   };
 
@@ -107,13 +144,56 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
             </Button>
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Dashboard - {quotation.quotationNumber}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Dashboard - {quotation.quotationNumber}</h1>
+              {commissionStatus && (
+                <span
+                  className={`inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${
+                    commissionStatus.paid
+                      ? 'bg-green-100 text-green-700'
+                      : commissionStatus.ready
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      commissionStatus.paid ? 'bg-green-500' : commissionStatus.ready ? 'bg-blue-500' : 'bg-gray-400'
+                    }`}
+                  />
+                  {commissionStatus.paid
+                    ? 'จ่ายคอมมิชชั่นแล้ว'
+                    : commissionStatus.ready
+                    ? 'พร้อมจ่ายคอมมิชชั่น'
+                    : 'ยังไม่พร้อมจ่ายคอม'}
+                </span>
+              )}
+              {commissionStatus?.ready && !commissionStatus.paid && (
+                <Button
+                  size="sm"
+                  className="h-6 text-[11px] px-2"
+                  disabled={savingCommission}
+                  onClick={() => handleSetCommissionPaid(true)}
+                >
+                  {savingCommission ? 'กำลังบันทึก...' : 'บันทึกจ่ายคอมแล้ว'}
+                </Button>
+              )}
+              {commissionStatus?.paid && (
+                <button
+                  type="button"
+                  className="text-[11px] text-gray-400 underline disabled:opacity-50"
+                  disabled={savingCommission}
+                  onClick={() => handleSetCommissionPaid(false)}
+                >
+                  ยกเลิก
+                </button>
+              )}
+            </div>
             <p className="text-sm text-gray-600 truncate">{quotation.tourName}</p>
           </div>
         </div>
         <div className="flex gap-2 justify-end">
-          <Link href={`/quotations/${resolvedParams.id}`}>
-            <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+          <Link href={`/quotations/${resolvedParams.id}`}>            <Button variant="outline" size="sm" className="text-xs sm:text-sm">
               <Eye className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">ดูใบเสนอราคา</span>
             </Button>
@@ -218,7 +298,9 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
         {activeTab === 'documents' && <DocumentsTab />}
         {activeTab === 'wholesale-cost' && <WholesaleCostTab quotation={quotation} />}
         {activeTab === 'profit' && <ProfitTab />}
-        {activeTab === 'checklist' && <ChecklistTab />}
+        {activeTab === 'checklist' && (
+          <ChecklistTab quotationId={resolvedParams.id} onStatusChange={fetchCommissionStatus} />
+        )}
       </div>
 
       {/* Invoice Modal */}
@@ -399,6 +481,8 @@ function OverviewTab({ quotation }: { quotation: any }) {
 
 function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId: string }) {
   const [updating, setUpdating] = useState(false);
+  const [showSendEmail, setShowSendEmail] = useState(false);
+  const [showShareLink, setShowShareLink] = useState(false);
 
   const statusOptions = [
     { value: 'PENDING', label: 'รอดำเนินการ', color: 'bg-yellow-500', textColor: 'text-yellow-700' },
@@ -501,9 +585,32 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
               <span className="hidden sm:inline">แก้ไข</span>
             </Button>
           </Link>
-          <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs sm:text-sm"
+            onClick={() => window.open(`/api/quotations/${quotation.id}/pdf`, '_blank')}
+          >
             <Download className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">PDF</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs sm:text-sm"
+            onClick={() => setShowSendEmail(true)}
+          >
+            <Mail className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">ส่งอีเมล</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs sm:text-sm"
+            onClick={() => setShowShareLink(true)}
+          >
+            <Link2 className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">สร้างลิงก์ PDF</span>
           </Button>
         </div>
       </div>
@@ -677,6 +784,20 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
           </CardContent>
         </Card>
       )}
+
+      <SendEmailModal
+        quotationId={quotationId}
+        open={showSendEmail}
+        type="QUOTATION"
+        label="ส่งใบเสนอราคาให้ลูกค้า"
+        onClose={() => setShowSendEmail(false)}
+        onSent={() => setShowSendEmail(false)}
+      />
+      <ShareLinkModal
+        quotationId={quotationId}
+        open={showShareLink}
+        onClose={() => setShowShareLink(false)}
+      />
     </div>
   );
 }
@@ -5322,72 +5443,530 @@ function ProfitTab() {
   );
 }
 
-function ChecklistTab() {
-  const [checklist, setChecklist] = useState([
-    { id: 1, label: 'ส่งใบเสนอราคาให้ลูกค้า', checked: true },
-    { id: 2, label: 'ได้รับการชำระมัดจำ', checked: false },
-    { id: 3, label: 'ชำระเงินให้ Wholesale', checked: false },
-    { id: 4, label: 'เก็บ Passport ครบ', checked: false },
-    { id: 5, label: 'จองตั๋วเครื่องบิน', checked: false },
-    { id: 6, label: 'จองโรงแรม', checked: false },
-    { id: 7, label: 'ได้รับการชำระเงินครบ', checked: false },
-    { id: 8, label: 'ส่งโปรแกรมให้ลูกค้า', checked: false },
-    { id: 9, label: 'ติดต่อไกด์', checked: false },
-    { id: 10, label: 'ส่งข้อมูลนักท่องเที่ยวให้ Wholesale', checked: false },
-  ]);
+// Maps a checklist item's autoEventKey to the /send-email API's `type` param.
+const EMAIL_EVENT_TYPE: Record<string, string> = {
+  QUOTATION_EMAIL_SENT: 'QUOTATION',
+  BOOKING_EMAIL_SENT: 'BOOKING',
+  RECEIPT_DEPOSIT_EMAIL_SENT: 'RECEIPT_DEPOSIT',
+  RECEIPT_FULL_EMAIL_SENT: 'RECEIPT_FULL',
+};
+
+// Shared "ส่งอีเมล" modal: fetches a preview (subject/body/default recipient) for the given
+// tracking-system email `type`, lets the user edit recipient/subject/body, then sends it.
+// Reused by both the Quotation tab (fixed type="QUOTATION") and the Checklist tab (type
+// derived per-item from EMAIL_EVENT_TYPE).
+function SendEmailModal({
+  quotationId,
+  open,
+  type,
+  label,
+  onClose,
+  onSent,
+}: {
+  quotationId: string;
+  open: boolean;
+  type: string;
+  label: string;
+  onClose: () => void;
+  onSent?: () => void | Promise<void>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [to, setTo] = useState('');
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+
+  useEffect(() => {
+    if (!open || !type) return;
+    setError('');
+    setTo('');
+    setSubject('');
+    setBody('');
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/quotations/${quotationId}/send-email/preview?type=${type}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(data.error || 'สร้างตัวอย่างอีเมลไม่สำเร็จ');
+        } else {
+          setTo(data.to || '');
+          setSubject(data.subject || '');
+          setBody(data.bodyHtml || '');
+        }
+      } catch (err) {
+        console.error('Error loading email preview:', err);
+        setError('สร้างตัวอย่างอีเมลไม่สำเร็จ');
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, type, quotationId]);
+
+  if (!open) return null;
+
+  const handleSend = async () => {
+    if (!to.trim()) {
+      setError('กรุณาระบุอีเมลผู้รับ');
+      return;
+    }
+    if (!subject.trim()) {
+      setError('กรุณาระบุหัวข้ออีเมล');
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await fetch(`/api/quotations/${quotationId}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, to: to.trim(), subject: subject.trim(), body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || 'ส่งอีเมลไม่สำเร็จ');
+      } else {
+        await onSent?.();
+      }
+    } catch (err) {
+      console.error('Error sending email:', err);
+      setError('ส่งอีเมลไม่สำเร็จ');
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
-    <Card>
-      <CardHeader>
-        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-          <ListChecks className="w-5 h-5" />
-          เช็คลิสต์การดำเนินการ
-        </h3>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2 sm:space-y-3">
-          {checklist.map((item) => (
-            <div 
-              key={item.id} 
-              className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <input
-                type="checkbox"
-                checked={item.checked}
-                onChange={() => {
-                  setChecklist(checklist.map(i => 
-                    i.id === item.id ? { ...i, checked: !i.checked } : i
-                  ));
-                }}
-                className="w-4 sm:w-5 h-4 sm:h-5 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <label className={`flex-1 cursor-pointer text-xs sm:text-sm ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                {item.label}
-              </label>
-              {item.checked && <CheckCircle className="w-4 sm:w-5 h-4 sm:h-5 text-green-500" />}
-            </div>
-          ))}
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold">ส่งอีเมล: {label}</h2>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
+            <XCircle className="w-5 h-5" />
+          </button>
         </div>
-        
-        <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-700 font-medium text-xs sm:text-sm">ความคืบหน้า</span>
-            <span className="font-bold text-blue-600 text-xs sm:text-sm">
-              {checklist.filter(i => i.checked).length} / {checklist.length}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3">
-            <div 
-              className="bg-blue-600 h-2 sm:h-3 rounded-full transition-all duration-300"
-              style={{ width: `${(checklist.filter(i => i.checked).length / checklist.length) * 100}%` }}
-            />
-          </div>
+        <div className="p-4 space-y-4">
+          {loading ? (
+            <div className="text-center text-gray-400 py-8 text-sm">กำลังโหลดตัวอย่างอีเมล...</div>
+          ) : (
+            <>
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
+              )}
+              <div>
+                <label className="block text-sm font-medium mb-1">ผู้รับ (To) *</label>
+                <input
+                  type="email"
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  placeholder="name@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">หัวข้อ (Subject) *</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">เนื้อหาอีเมล</label>
+                <QuillEditor value={body} onChange={setBody} height="220px" />
+              </div>
+            </>
+          )}
         </div>
+        <div className="p-4 border-t flex gap-2 justify-end">
+          <Button variant="outline" onClick={onClose}>
+            ยกเลิก
+          </Button>
+          <Button onClick={handleSend} disabled={loading || sending}>
+            {sending ? 'กำลังส่ง...' : 'ยืนยันส่งอีเมล'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="mt-4 text-center text-xs sm:text-sm text-gray-500">
-          <p>Module นี้พร้อมใช้งาน - สามารถบันทึกสถานะได้เมื่อเชื่อมต่อ API</p>
+function ShareLinkModal({
+  quotationId,
+  open,
+  onClose,
+}: {
+  quotationId: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [url, setUrl] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setError('');
+    setUrl('');
+    setCopied(false);
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/quotations/${quotationId}/share-link`, { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(data.error || 'สร้างลิงก์ไม่สำเร็จ');
+        } else {
+          setUrl(data.url || '');
+          setExpiresAt(data.expiresAt || '');
+        }
+      } catch (err) {
+        console.error('Error creating share link:', err);
+        setError('สร้างลิงก์ไม่สำเร็จ');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [open, quotationId]);
+
+  if (!open) return null;
+
+  const handleCopy = async () => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Clipboard copy failed:', err);
+    }
+  };
+
+  const expiresLabel = expiresAt
+    ? new Date(expiresAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Link2 className="w-5 h-5" />
+            ลิงก์ PDF ใบเสนอราคา
+          </h2>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
+            <XCircle className="w-5 h-5" />
+          </button>
         </div>
-      </CardContent>
-    </Card>
+        <div className="p-4 space-y-4">
+          {loading ? (
+            <div className="text-center text-gray-400 py-8 text-sm">กำลังสร้างลิงก์...</div>
+          ) : error ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium mb-1">ลิงก์สำหรับส่งให้ลูกค้า</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={url}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 border rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700"
+                  />
+                  <Button size="sm" onClick={handleCopy}>
+                    {copied ? 'คัดลอกแล้ว' : 'คัดลอก'}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                ลิงก์นี้เปิดดู/ดาวน์โหลด PDF ได้โดยไม่ต้องล็อกอิน และจะหมดอายุวันที่ {expiresLabel} (ใช้งานได้ 7 วันหลังสร้าง)
+              </p>
+            </>
+          )}
+        </div>
+        <div className="p-4 border-t flex justify-end">
+          <Button variant="outline" onClick={onClose}>ปิด</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChecklistTab({
+  quotationId,
+  onStatusChange,
+}: {
+  quotationId: string;
+  onStatusChange?: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [whtUploadingFor, setWhtUploadingFor] = useState<number | null>(null);
+  const [whtDocs, setWhtDocs] = useState<any[]>([]);
+
+  // รายการเช็คลิสต์ที่กำลังเปิด Modal "ส่งอีเมล" อยู่ (null = ปิด)
+  const [sendEmailItem, setSendEmailItem] = useState<any | null>(null);
+
+  const loadChecklist = async () => {
+    try {
+      const res = await fetch(`/api/quotations/${quotationId}/checklist`);
+      if (res.ok) {
+        const data = await res.json();
+        setGroups(data.groups || []);
+        onStatusChange?.();
+      }
+    } catch (error) {
+      console.error('Error loading checklist:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadWhtDocs = async () => {
+    try {
+      const res = await fetch(`/api/quotations/${quotationId}/wht-documents`);
+      if (res.ok) {
+        const data = await res.json();
+        setWhtDocs(data.documents || []);
+      }
+    } catch (error) {
+      console.error('Error loading WHT documents:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadChecklist();
+    loadWhtDocs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotationId]);
+
+  const allLeafItems = groups.flatMap((g) => (g.children?.length ? g.children : [g]));
+  const checkedCount = allLeafItems.filter((i: any) => i.checked).length;
+
+  const toggleItem = async (item: any) => {
+    setTogglingId(item.id);
+    const nextChecked = !item.checked;
+    try {
+      const res = await fetch(`/api/quotations/${quotationId}/checklist`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: item.id, checked: nextChecked }),
+      });
+      if (!res.ok) {
+        alert('บันทึกไม่สำเร็จ');
+      } else {
+        await loadChecklist();
+      }
+    } catch (error) {
+      console.error('Error updating checklist item:', error);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const uploadWhtDoc = async (item: any, file: File) => {
+    setWhtUploadingFor(item.id);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/quotations/${quotationId}/wht-documents`, {
+        method: 'POST',
+        body: form,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'อัปโหลดไม่สำเร็จ');
+      } else {
+        await loadChecklist();
+        await loadWhtDocs();
+      }
+    } catch (error) {
+      console.error('Error uploading WHT document:', error);
+      alert('อัปโหลดไม่สำเร็จ');
+    } finally {
+      setWhtUploadingFor(null);
+    }
+  };
+
+  const renderItem = (item: any) => {
+    const emailType = EMAIL_EVENT_TYPE[item.autoEventKey];
+    const isWht = item.autoEventKey === 'CUSTOMER_WHT_DOC_UPLOADED';
+    const status = item.checked
+      ? { dot: 'bg-green-500', label: 'เสร็จแล้ว', text: 'text-green-700' }
+      : item.requiredForCommission
+      ? { dot: 'bg-amber-500', label: 'ต้องทำ', text: 'text-amber-700' }
+      : { dot: 'bg-gray-300', label: 'รอดำเนินการ', text: 'text-gray-400' };
+
+    return (
+      <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
+        <td className="px-3 py-2 align-top">
+          <input
+            type="checkbox"
+            checked={!!item.checked}
+            disabled={togglingId === item.id}
+            onChange={() => toggleItem(item)}
+            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+          />
+        </td>
+        <td className="px-3 py-2 align-top whitespace-nowrap">
+          <span className={`inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-medium ${status.text}`}>
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${status.dot}`} />
+            {status.label}
+          </span>
+        </td>
+        <td className="px-3 py-2 align-top">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className={`text-xs sm:text-sm ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+              {item.label}
+            </span>
+            {!!item.autoEventKey && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-600 bg-amber-50 rounded-full px-1.5 py-0.5 whitespace-nowrap">
+                <Zap className="w-2.5 h-2.5" /> อัตโนมัติ
+              </span>
+            )}
+          </div>
+
+          {isWht && whtDocs.length > 0 && (
+            <ul className="mt-1 text-[11px] text-blue-600 space-y-0.5">
+              {whtDocs.map((doc) => (
+                <li key={doc.id}>
+                  <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="underline">
+                    {doc.fileName || 'ไฟล์แนบ'}
+                  </a>
+                  <span className="text-gray-400"> ({new Date(doc.createdAt).toLocaleDateString('th-TH')})</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </td>
+        <td className="px-3 py-2 align-top text-right">
+          <div className="flex items-center justify-end gap-1.5">
+            {emailType && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-[11px] h-7 px-2.5"
+                onClick={() => setSendEmailItem(item)}
+              >
+                ส่งอีเมล
+              </Button>
+            )}
+            {isWht && (
+              <label
+                className={`text-[11px] h-7 inline-flex items-center px-2.5 border rounded-md cursor-pointer hover:bg-gray-50 whitespace-nowrap ${
+                  whtUploadingFor === item.id ? 'opacity-50 pointer-events-none' : ''
+                }`}
+              >
+                {whtUploadingFor === item.id ? 'กำลังอัปโหลด...' : 'อัปโหลดไฟล์'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadWhtDoc(item, file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+            <ListChecks className="w-5 h-5" />
+            ระบบติดตามงานหลังการขาย (Tracking System)
+          </h3>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center text-gray-400 py-8 text-sm">กำลังโหลด...</div>
+          ) : groups.length === 0 ? (
+            <div className="text-center text-gray-400 py-8 text-sm">
+              ยังไม่มีรายการติดตาม — ตั้งค่าได้ที่{' '}
+              <Link href="/settings/checklist-items" className="text-blue-600 underline">
+                ตั้งค่า &gt; ระบบติดตามงานหลังการขาย
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="border rounded-lg overflow-x-auto">
+                <table className="w-full text-xs sm:text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-500 text-left">
+                      <th className="px-3 py-2 font-medium w-8"></th>
+                      <th className="px-3 py-2 font-medium whitespace-nowrap">สถานะ</th>
+                      <th className="px-3 py-2 font-medium">รายการ</th>
+                      <th className="px-3 py-2 font-medium text-right">ดำเนินการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {groups.map((stage: any) => {
+                      const hasChildren = !!stage.children?.length;
+                      if (!hasChildren) return renderItem(stage);
+                      const doneCount = stage.children.filter((c: any) => c.checked).length;
+                      return (
+                        <Fragment key={stage.id}>
+                          <tr className="bg-purple-50/60">
+                            <td colSpan={4} className="px-3 py-1.5 text-[11px] font-semibold text-purple-700">
+                              {stage.label}
+                              <span className="ml-2 text-[10px] font-medium text-purple-400">
+                                {doneCount}/{stage.children.length}
+                              </span>
+                            </td>
+                          </tr>
+                          {stage.children.map((child: any) => renderItem(child))}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-700 font-medium text-xs sm:text-sm">ความคืบหน้า</span>
+                  <span className="font-bold text-blue-600 text-xs sm:text-sm">
+                    {checkedCount} / {allLeafItems.length}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3">
+                  <div
+                    className="bg-blue-600 h-2 sm:h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${allLeafItems.length ? (checkedCount / allLeafItems.length) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <SendEmailModal
+        quotationId={quotationId}
+        open={!!sendEmailItem}
+        type={sendEmailItem ? EMAIL_EVENT_TYPE[sendEmailItem.autoEventKey] : ''}
+        label={sendEmailItem?.label || ''}
+        onClose={() => setSendEmailItem(null)}
+        onSent={async () => {
+          setSendEmailItem(null);
+          await loadChecklist();
+        }}
+      />
+    </div>
   );
 }

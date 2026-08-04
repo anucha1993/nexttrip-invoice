@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { fetchSale, fetchWholesaler } from '@/lib/services/tour-api';
+import { fetchSale, fetchWholesaler, notifyBookingInvoiceStatus } from '@/lib/services/tour-api';
 
 // GET - Get single quotation by ID
 export async function GET(
@@ -16,7 +16,7 @@ export async function GET(
     const quotations = await conn.query(
       `SELECT 
         q.id, q.quotationNumber, q.customerId, q.tourName, q.bookingCode, 
-        q.ntCode, q.customTourCode, q.countryId, q.airlineId, q.wholesaleId,
+        q.ntCode, q.customTourCode, q.tourType, q.countryId, q.airlineId, q.wholesaleId,
         q.departureDate, q.returnDate, q.numDays, q.paxCount, q.saleId,
         q.quotationDate, q.validUntil, q.depositDueDate, 
         q.depositAmount, q.fullPaymentDueDate, q.fullPaymentAmount,
@@ -181,6 +181,7 @@ export async function PUT(
         bookingCode = ?,
         ntCode = ?,
         customTourCode = ?,
+        tourType = ?,
         countryId = ?,
         airlineId = ?,
         wholesaleId = ?,
@@ -217,6 +218,7 @@ export async function PUT(
         body.bookingCode || null,
         body.ntCode || null,
         body.customTourCode || null,
+        ['NORMAL', 'PROMOTION', 'FLASH_SALE'].includes(body.tourType) ? body.tourType : 'NORMAL',
         countryId,
         airlineId,
         wholesaleId,
@@ -350,11 +352,51 @@ export async function DELETE(
     const { id } = await params;
     conn = await pool.getConnection();
 
+    // ป้องกันการลบใบเสนอราคาที่มีใบแจ้งหนี้อ้างอิงอยู่แล้ว (จะทำให้ invoices.quotationId
+    // กลายเป็นข้อมูลกำพร้า) — ต้องยกเลิก/ลบใบแจ้งหนี้เหล่านั้นก่อน
+    const invoiceRows = await conn.query(
+      'SELECT COUNT(*) as cnt FROM invoices WHERE quotationId = ?',
+      [id]
+    );
+    const invoiceCount = Number(invoiceRows[0]?.cnt || 0);
+    if (invoiceCount > 0) {
+      return NextResponse.json(
+        {
+          error: `ไม่สามารถลบได้: มีใบแจ้งหนี้ ${invoiceCount} รายการอ้างอิงใบเสนอราคานี้อยู่ กรุณายกเลิก/ลบใบแจ้งหนี้ก่อน`,
+        },
+        { status: 409 }
+      );
+    }
+
+    // ถ้าใบเสนอราคานี้ถูกสร้างมาจาก Booking ต้องแจ้ง tour-api ว่ายกเลิกแล้ว
+    // (best-effort) เพื่อรีเซ็ตป้าย "Invoice ✓" ที่หน้า booking กลับเป็น
+    // "ยังไม่ได้ส่ง" — ไม่เช่นนั้นฝั่ง booking จะค้างว่าส่งไปแล้วทั้งที่ถูกลบไปแล้ว
+    const bookingRows = await conn.query(
+      'SELECT bookingId, quotationNumber FROM quotations WHERE id = ? LIMIT 1',
+      [id]
+    );
+    const bookingId = bookingRows[0]?.bookingId;
+    const quotationNumber = bookingRows[0]?.quotationNumber;
+
     // Delete items first (cascade should handle this but just in case)
     await conn.query('DELETE FROM quotation_items WHERE quotationId = ?', [id]);
 
     // Delete quotation
     await conn.query('DELETE FROM quotations WHERE id = ?', [id]);
+
+    if (bookingId != null) {
+      try {
+        await notifyBookingInvoiceStatus({
+          bookingId: Number(bookingId),
+          status: 'cancelled',
+          quotationNumber,
+          note: 'ใบเสนอราคาถูกลบจากระบบ Invoice',
+        });
+      } catch (err) {
+        // ไม่ block การลบเพราะเรื่องแจ้งเตือนล้มเหลว — tour-api อาจไม่ว่างชั่วคราว
+        console.error('⚠️ DELETE quotation: tour-api callback failed:', err);
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

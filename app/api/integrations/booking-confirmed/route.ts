@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import type { PoolConnection } from 'mariadb';
 import pool from '@/lib/db';
 import { phoneKey } from '@/lib/phone';
+import { fetchSales } from '@/lib/services/tour-api';
 
 // ---------------------------------------------------------------------------
 // Inbound webhook: tour-api calls this when a booking is CONFIRMED.
@@ -37,6 +38,7 @@ interface BookingPayload {
     countryName?: string | null;
     airlineId?: number | null;
     airlineName?: string | null;
+    tourType?: string | null;
   };
   travel?: {
     departureDate?: string | null;
@@ -97,6 +99,26 @@ async function generateQuotationNumber(conn: PoolConnection): Promise<string> {
     next = (parseInt(String(rows[0].quotationNumber).slice(-4), 10) || 0) + 1;
   }
   return `${prefix}${next.toString().padStart(4, '0')}`;
+}
+
+/** Resolve the booking's `saleCode` (which is actually the sale staff's NAME,
+ *  not a numeric code — see tour-api BookingController comment) to the
+ *  matching numeric `saleId` (tour-api user id) by name, so the quotation
+ *  links to a real sale user and `saleName` can be displayed/joined normally
+ *  everywhere else in the app. Best-effort: returns null on no match/error. */
+async function resolveSaleId(saleCode: string | null | undefined): Promise<number | null> {
+  const name = (saleCode || '').trim();
+  if (!name) return null;
+  try {
+    const sales = await fetchSales();
+    const match = sales.find(
+      (s) => s.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    return match?.id ?? null;
+  } catch (err) {
+    console.error('⚠️ booking-confirmed: failed to resolve saleCode to saleId:', err);
+    return null;
+  }
 }
 
 /** Find an existing customer by email or normalized phone, else create one.
@@ -281,6 +303,17 @@ export async function POST(request: NextRequest) {
       payload.bookingId
     );
     const quotationNumber = await generateQuotationNumber(conn);
+    // ntCode mirrors how the manual create form fills it when a tour is picked
+    // from a catalog (ntCode = the source system's own tour code) — here the
+    // source is tour-api, whose `tour.tourCode` is already the "NT......" code
+    // shown elsewhere (e.g. tour-backend's booking list), NOT a number this
+    // app should invent itself.
+    const ntCode = payload.tour?.tourCode || null;
+    const saleId = await resolveSaleId(payload.saleCode);
+    const rawTourType = payload.tour?.tourType ?? '';
+    const tourType = ['NORMAL', 'PROMOTION', 'FLASH_SALE'].includes(rawTourType)
+      ? rawTourType
+      : 'NORMAL';
 
     const notesParts = [
       `Auto-created from booking ${bookingCode}`,
@@ -289,9 +322,14 @@ export async function POST(request: NextRequest) {
       payload.specialRequest ? `Request: ${payload.specialRequest}` : null,
     ].filter(Boolean);
 
+    const bookingIdNum =
+      payload.bookingId != null && Number.isInteger(Number(payload.bookingId))
+        ? Number(payload.bookingId)
+        : null;
+
     const result = await conn.query(
       `INSERT INTO quotations (
-        quotationNumber, customerId, tourName, bookingCode, customTourCode,
+        quotationNumber, customerId, tourName, bookingCode, bookingId, bookingSyncStatus, ntCode, customTourCode, tourType,
         countryId, airlineId, wholesaleId, departureDate, returnDate,
         numDays, paxCount, saleId, quotationDate, validUntil,
         depositAmount, fullPaymentAmount,
@@ -300,13 +338,17 @@ export async function POST(request: NextRequest) {
         status, paymentStatus, notes, createdById,
         vatMode, preVatAmount, includeVatAmount, netPayable, noCost,
         createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [
         quotationNumber,
         customerId,
         tourName,
         bookingCode,
+        bookingIdNum,
+        'PENDING_REVIEW',
+        ntCode,
         payload.tour?.wholesalerTourCode || null,
+        tourType,
         countryId,
         airlineId,
         wholesaleId,
@@ -314,7 +356,7 @@ export async function POST(request: NextRequest) {
         payload.travel?.returnDate || null,
         numDays,
         paxCount,
-        null, // saleId: booking gives a string sale_code, not a numeric invoice sale id
+        saleId,
         now,
         validUntil,
         0, // depositAmount

@@ -9,7 +9,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { 
   Plus, Search, FileText, Pencil, Trash2, Eye, 
   ChevronLeft, ChevronRight, Calendar, Users, 
-  Clock, CheckCircle, XCircle, AlertCircle, Banknote, LayoutDashboard
+  Clock, CheckCircle, XCircle, Banknote, LayoutDashboard
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -18,6 +18,8 @@ interface Quotation {
   quotationNumber: string;
   tourName: string;
   bookingCode: string | null;
+  bookingId: number | null;
+  bookingSyncStatus: 'PENDING_REVIEW' | 'CONVERTED' | null;
   ntCode: string | null;
   customTourCode: string | null;
   departureDate: string | null;

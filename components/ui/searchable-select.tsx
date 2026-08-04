@@ -16,7 +16,14 @@ interface SearchableSelectProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  /** Visual density. 'sm' is used for compact, field-dense forms. Defaults to 'md' (unchanged behavior). */
+  uiSize?: 'sm' | 'md';
 }
+
+const triggerSizeClasses = {
+  sm: 'px-2.5 py-1.5 text-sm',
+  md: 'px-3 py-2 text-sm',
+};
 
 export function SearchableSelect({
   options,
@@ -25,6 +32,7 @@ export function SearchableSelect({
   placeholder = '-- เลือก --',
   className = '',
   disabled = false,
+  uiSize = 'md',
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -81,8 +89,9 @@ export function SearchableSelect({
       {/* Selected Value Display */}
       <div
         className={`
-          flex items-center justify-between w-full px-3 py-2 text-sm 
+          flex items-center justify-between w-full text-sm 
           border rounded-md bg-white cursor-pointer
+          ${triggerSizeClasses[uiSize]}
           ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-blue-400'}
           ${isOpen ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300'}
         `}

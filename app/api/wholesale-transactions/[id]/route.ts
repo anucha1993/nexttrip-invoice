@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { markChecklistAuto } from '@/lib/checklist-auto';
 
 // GET /api/wholesale-transactions/[id] - Get single transaction
 export async function GET(
@@ -205,6 +206,12 @@ export async function PUT(
 
     await connection.commit();
 
+    if (shouldConfirm && existingTx.transactionType === 'REFUND') {
+      await markChecklistAuto(Number(existingTx.quotationId), 'WHOLESALE_REFUND_CONFIRMED', {
+        sourceRef: `wholesale_transaction:${transactionId}`,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       message: 'แก้ไขธุรกรรมเรียบร้อย',
@@ -282,6 +289,12 @@ export async function PATCH(
       );
 
       await connection.commit();
+
+      if (transaction.transactionType === 'REFUND') {
+        await markChecklistAuto(Number(transaction.quotationId), 'WHOLESALE_REFUND_CONFIRMED', {
+          sourceRef: `wholesale_transaction:${transactionId}`,
+        });
+      }
 
       return NextResponse.json({
         success: true,

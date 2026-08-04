@@ -6,7 +6,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { User, Building, CreditCard, Bell, Shield, Palette, ShieldCheck, MessageCircle, Landmark } from 'lucide-react';
+import { User, Building, CreditCard, Bell, Shield, Palette, ShieldCheck, MessageCircle, Landmark, ListChecks, FileText, Mail, Send } from 'lucide-react';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('company');
@@ -67,6 +67,34 @@ export default function SettingsPage() {
               >
                 <MessageCircle className="w-5 h-5" />
                 <span className="font-medium">ส่งต่อสลิป (LINE OA)</span>
+              </Link>
+              <Link
+                href="/settings/checklist-items"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <ListChecks className="w-5 h-5" />
+                <span className="font-medium">เช็คลิสต์หลังการขาย</span>
+              </Link>
+              <Link
+                href="/settings/quotation-pdf"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <FileText className="w-5 h-5" />
+                <span className="font-medium">หัวเอกสาร PDF ใบเสนอราคา</span>
+              </Link>
+              <Link
+                href="/settings/email-templates"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <Mail className="w-5 h-5" />
+                <span className="font-medium">Template อีเมล (Tracking system)</span>
+              </Link>
+              <Link
+                href="/settings/smtp"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <Send className="w-5 h-5" />
+                <span className="font-medium">SMTP ผู้ส่งอีเมล</span>
               </Link>
             </nav>
           </Card>

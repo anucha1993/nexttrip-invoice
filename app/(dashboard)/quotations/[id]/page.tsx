@@ -215,7 +215,11 @@ export default function ViewQuotationPage({ params }: { params: Promise<{ id: st
             <Copy className="w-4 h-4 mr-2" />
             คัดลอก
           </Button>
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open(`/api/quotations/${resolvedParams.id}/pdf`, '_blank')}
+          >
             <Printer className="w-4 h-4 mr-2" />
             พิมพ์
           </Button>

@@ -78,6 +78,54 @@ async function tourApiGet<T>(
   }
 }
 
+/**
+ * Low-level PATCH helper. Same auth/timeout behaviour as `tourApiGet`.
+ * Never throws for the caller by default — callers that need best-effort,
+ * non-blocking semantics should wrap the call in try/catch themselves.
+ */
+async function tourApiPatch<T>(path: string, body: unknown): Promise<T> {
+  if (!TOUR_API_URL) {
+    throw new TourApiError('TOUR_API_URL is not configured in .env');
+  }
+  if (!TOUR_API_TOKEN) {
+    throw new TourApiError('TOUR_API_TOKEN is not configured in .env');
+  }
+
+  const base = TOUR_API_URL.replace(/\/+$/, '');
+  const url = `${base}/${path.replace(/^\/+/, '')}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${TOUR_API_TOKEN}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new TourApiError(
+        `tour-api ${path} responded ${res.status}: ${text.slice(0, 300)}`,
+        res.status
+      );
+    }
+    return (await res.json()) as T;
+  } catch (err) {
+    if (err instanceof TourApiError) throw err;
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new TourApiError(`tour-api ${path} request failed: ${reason}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -123,6 +171,7 @@ export interface WholesaleOption {
   nameTh: string;
   nameEn: string;
   taxId: string;
+  email: string | null;
 }
 
 export interface SaleOption {
@@ -254,6 +303,7 @@ function mapWholesale(w: Record<string, unknown>): WholesaleOption {
     nameTh: (w.company_name_th as string) || (w.name as string) || '',
     nameEn: (w.company_name_en as string) || (w.name as string) || '',
     taxId: (w.tax_id as string) || '',
+    email: (w.contact_email as string) || null,
   };
 }
 
@@ -405,3 +455,40 @@ export async function fetchTourPeriods(tourId: number): Promise<TourPeriodOption
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Booking → Invoice callback (reverse direction: invoice reports back to
+// tour-api). Best-effort: callers should catch failures themselves so a
+// failed callback never blocks a quotation/invoice/payment save.
+// ---------------------------------------------------------------------------
+
+export type BookingInvoiceStatus = 'quotation_created' | 'invoiced' | 'paid' | 'cancelled';
+
+export interface NotifyBookingInvoiceStatusInput {
+  bookingId: number;
+  status: BookingInvoiceStatus;
+  quotationId?: number | null;
+  quotationNumber?: string | null;
+  invoiceNumber?: string | null;
+  note?: string | null;
+}
+
+/**
+ * Reports a booking's invoice-side lifecycle back to tour-api so the booking
+ * admin (tour-backend) can display the linked quotation number and status.
+ * Uses the same Sanctum service token already configured for other tour-api
+ * calls. Throws `TourApiError` on failure — callers decide whether to
+ * swallow it (recommended for non-critical notification points).
+ */
+export async function notifyBookingInvoiceStatus(
+  input: NotifyBookingInvoiceStatusInput
+): Promise<void> {
+  await tourApiPatch(`integrations/bookings/${input.bookingId}/invoice-status`, {
+    status: input.status,
+    quotationId: input.quotationId ?? undefined,
+    quotationNumber: input.quotationNumber ?? undefined,
+    invoiceNumber: input.invoiceNumber ?? undefined,
+    note: input.note ?? undefined,
+  });
+}
+

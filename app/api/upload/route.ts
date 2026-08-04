@@ -1,5 +1,5 @@
 // app/api/upload/route.ts
-// API สำหรับ Upload ไฟล์ — เก็บบน Cloudflare (Images สำหรับรูป, R2 สำหรับไฟล์อื่น)
+// API สำหรับ Upload ไฟล์ — เก็บบน Cloudflare R2 ทุกไฟล์ (local disk เป็น fallback ถ้ายังไม่ตั้งค่า R2)
 
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     const ext = path.extname(file.name) || (file.type === 'application/pdf' ? '.pdf' : '.jpg');
     const filename = `${timestamp}_${randomStr}${ext}`;
 
-    // Upload to Cloudflare (images -> Cloudflare Images, files -> R2); local disk if unconfigured
+    // Upload to Cloudflare R2 (all file types); local disk if R2 unconfigured
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const stored = await uploadFile({

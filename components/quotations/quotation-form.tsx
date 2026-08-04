@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Card, CardHeader as CardHeaderBase, CardContent as CardContentBase } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Input as InputBase } from '@/components/ui/input';
+import { Select as SelectBase } from '@/components/ui/select';
+import { SearchableSelect as SearchableSelectBase } from '@/components/ui/searchable-select';
 import { 
   ArrowLeft, Save, FileText, User, Plane, Calendar, 
   Plus, Trash2, DollarSign, ChevronDown, ChevronUp, UserPlus, Edit, X,
@@ -14,6 +14,26 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { CustomerModal } from '@/components/customers/customer-modal';
+
+// This form packs a lot of fields onto one screen (per product decision: keep everything
+// on a single page, no tabs/accordions). To reduce visual clutter/height instead, every
+// Card/Input/Select/SearchableSelect in THIS file defaults to a compact ('sm') density.
+// Call sites can still override via an explicit size/padding prop if ever needed.
+const CardHeader = (props: React.ComponentProps<typeof CardHeaderBase>) => (
+  <CardHeaderBase padding="sm" {...props} />
+);
+const CardContent = (props: React.ComponentProps<typeof CardContentBase>) => (
+  <CardContentBase padding="sm" {...props} />
+);
+const Input = (props: React.ComponentProps<typeof InputBase>) => (
+  <InputBase uiSize="sm" {...props} />
+);
+const Select = (props: React.ComponentProps<typeof SelectBase>) => (
+  <SelectBase uiSize="sm" {...props} />
+);
+const SearchableSelect = (props: React.ComponentProps<typeof SearchableSelectBase>) => (
+  <SearchableSelectBase uiSize="sm" {...props} />
+);
 
 interface Customer {
   id: string;
@@ -152,6 +172,7 @@ export interface QuotationFormProps {
     bookingCode?: string;
     ntCode?: string;
     customTourCode?: string;
+    tourType?: 'NORMAL' | 'PROMOTION' | 'FLASH_SALE';
     countryId?: number | null;
     airlineId?: number | null;
     wholesaleId?: number | null;
@@ -243,6 +264,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
     bookingCode: initialData?.bookingCode || '',
     ntCode: initialData?.ntCode || '',
     customTourCode: initialData?.customTourCode || '',
+    tourType: initialData?.tourType || 'NORMAL' as 'NORMAL' | 'PROMOTION' | 'FLASH_SALE',
     countryId: initialData?.countryId?.toString() || '',
     airlineId: initialData?.airlineId?.toString() || '',
     wholesaleId: initialData?.wholesaleId?.toString() || '',
@@ -1106,15 +1128,15 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
       )}
 
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4">
             {/* Customer Search */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <User className="w-5 h-5" />
+                  <div className="flex items-center gap-2 font-semibold text-sm">
+                    <User className="w-4 h-4" />
                     ค้นหาลูกค้า
                   </div>
                   <Button
@@ -1132,9 +1154,9 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
                     ค้นหาลูกค้า *
                   </label>
                   <Input
@@ -1255,15 +1277,22 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
             {/* Tour Info */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2 font-semibold">
-                  <Plane className="w-5 h-5" />
-                  ข้อมูลทัวร์
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 font-semibold text-sm">
+                    <Plane className="w-4 h-4" />
+                    ข้อมูลทัวร์
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span>รหัส NT : <span className="font-mono font-semibold text-gray-700">{formData.ntCode || '-'}</span></span>
+                    <span>รหัสทัวร์กำหนดเอง : <span className="font-mono font-semibold text-gray-700">{formData.customTourCode || '-'}</span></span>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">ค้นหาจากระบบเดิม (ไม่บังคับ)</p>
                 {/* Tour Search from DB2 */}
                 <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
                     ค้นหาทัวร์จากระบบเดิม (DB2)
                   </label>
                   <Input  className="bg-green-100"
@@ -1320,7 +1349,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                 {/* Period Selection */}
                 {tourPeriods.length > 0 && (
                   <div className="relative">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       เลือกช่วงเดินทาง (Period)
                     </label>
                     <div 
@@ -1365,8 +1394,10 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   </div>
                 )}
 
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pt-1 border-t border-gray-100">รายละเอียดแพ็คเกจ</p>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-2">
                     ชื่อแพ็คเกจทัวร์ *
                     {selectedTour && !isCustomTour && formData.tourName && (
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
@@ -1404,50 +1435,39 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   {errors.tourName && <p className="text-red-500 text-sm mt-1">{errors.tourName}</p>}
                 </div>
 
-                {/* รหัสทัวร์ 3 แบบ */}
-                <div className="grid grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      รหัสจอง (BK) - Auto
-                    </label>
-                    <Input
-                      value={formData.bookingCode}
-                      onChange={(e) => setFormData({ ...formData, bookingCode: e.target.value })}
-                      placeholder="BK260100001 (Auto)"
-                      readOnly={mode === 'create'}
-                      className="bg-gray-50 font-mono text-sm"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">สร้างอัตโนมัติ</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      รหัส NextTrip (NT)
-                    </label>
-                    <Input
-                      value={formData.ntCode}
-                      readOnly
-                      placeholder="จาก DB2"
-                      className="bg-gray-50 font-mono text-sm cursor-not-allowed"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">ดึงจากทัวร์ที่เลือก</p>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      รหัสทัวร์กำหนดเอง
-                    </label>
-                    <Input
-                      value={formData.customTourCode}
-                      readOnly
-                      placeholder="จาก DB2"
-                      className="bg-gray-50 font-mono text-sm cursor-not-allowed"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">ดึงจากทัวร์ที่เลือก (ถ้ามี)</p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">ประเภททัวร์</label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: 'NORMAL', label: 'ราคาปกติ' },
+                      { value: 'PROMOTION', label: 'โปรโมชั่น' },
+                      { value: 'FLASH_SALE', label: 'ทัวร์ไฟไหม้' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, tourType: opt.value as 'NORMAL' | 'PROMOTION' | 'FLASH_SALE' })}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                          formData.tourType === opt.value
+                            ? opt.value === 'FLASH_SALE'
+                              ? 'bg-red-100 border-red-300 text-red-700'
+                              : opt.value === 'PROMOTION'
+                              ? 'bg-orange-100 border-orange-300 text-orange-700'
+                              : 'bg-blue-100 border-blue-300 text-blue-700'
+                            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pt-1 border-t border-gray-100">เส้นทาง &amp; ผู้ให้บริการ</p>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       ประเทศ <span className="text-red-500">*</span>
                     </label>
                     <SearchableSelect
@@ -1466,7 +1486,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                     {errors.countryId && <p className="text-red-500 text-sm mt-1">{errors.countryId}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       โฮลเซลล์ <span className="text-red-500">*</span>
                     </label>
                     <SearchableSelect
@@ -1486,9 +1506,9 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       สายการบิน <span className="text-red-500">*</span>
                     </label>
                     <SearchableSelect
@@ -1507,7 +1527,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                     {errors.airlineId && <p className="text-red-500 text-sm mt-1">{errors.airlineId}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       พนักงานขาย <span className="text-red-500">*</span>
                     </label>
                     <SearchableSelect
@@ -1526,9 +1546,11 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pt-1 border-t border-gray-100">วันเดินทาง &amp; จำนวนคน</p>
+
+                <div className="grid grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-2">
                       วันเดินทางไป
                       {isDateFieldsDisabled && formData.departureDate && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
@@ -1557,7 +1579,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-2">
                       วันเดินทางกลับ
                       {isDateFieldsDisabled && formData.returnDate && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
@@ -1586,7 +1608,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                     />
                   </div>
                   <div className="col-span-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-2">
                       จำนวนวัน
                       {isDateFieldsDisabled && formData.numDays && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
@@ -1617,7 +1639,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                     />
                   </div>
                     <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       จำนวนผู้เดินทาง (PAX)
                     </label>
                     <Input
@@ -1639,8 +1661,8 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-semibold text-green-600">
-                    <DollarSign className="w-5 h-5" />
+                  <div className="flex items-center gap-2 font-semibold text-sm text-green-600">
+                    <DollarSign className="w-4 h-4" />
                     รายได้
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => addItem('INCOME')}>
@@ -1745,8 +1767,8 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-semibold text-red-600">
-                    <DollarSign className="w-5 h-5" />
+                  <div className="flex items-center gap-2 font-semibold text-sm text-red-600">
+                    <DollarSign className="w-4 h-4" />
                     ส่วนลด / ของแถม
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => addItem('DISCOUNT')}>
@@ -1843,8 +1865,8 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
             {/* Notes */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2 font-semibold">
-                  <FileText className="w-5 h-5" />
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <FileText className="w-4 h-4" />
                   หมายเหตุ
                 </div>
               </CardHeader>
@@ -1854,33 +1876,30 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="หมายเหตุเพิ่มเติม..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </CardContent>
             </Card>
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
-            {/* เลขที่ใบเสนอราคา และ รหัสทัวร์ */}
+          <div className="space-y-4">
+            {/* ข้อมูลเอกสาร - รหัส/ข้อมูลที่ระบบเติมให้อัตโนมัติ ไม่ต้องกรอกเอง */}
             <Card>
-              <CardContent className="pt-4">
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      เลขที่ใบเสนอราคา
-                      <span className="text-xs text-gray-400 ml-1">(Auto)</span>
-                    </label>
-                    <Input
-                      value={quotationNumber}
-                      readOnly
-                      disabled
-                      className="bg-gray-100 cursor-not-allowed font-mono text-sm"
-                      placeholder="กำลังสร้าง..."
-                    />
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 font-semibold text-sm">
+                    <FileText className="w-4 h-4" />
+                    ข้อมูลเอกสาร
                   </div>
-                  
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span>เลขที่ใบเสนอราคา : <span className="font-mono font-semibold text-gray-700">{quotationNumber || 'กำลังสร้าง...'}</span></span>
+                    <span>รหัสจอง (BK) : <span className="font-mono font-semibold text-gray-700">{formData.bookingCode || 'Auto'}</span></span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       id="noCost"
@@ -1904,7 +1923,6 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                       </span>
                     </label>
                   </div>
-                </div>
               </CardContent>
             </Card>
 
@@ -1913,8 +1931,8 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <User className="w-5 h-5" />
+                    <div className="flex items-center gap-2 font-semibold text-sm">
+                      <User className="w-4 h-4" />
                       ข้อมูลลูกค้า
                     </div>
                     <Button
@@ -2000,15 +2018,15 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
             {/* Payment Info */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2 font-semibold">
-                  <Calendar className="w-5 h-5" />
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <Calendar className="w-4 h-4" />
                   เงื่อนไขการชำระเงิน
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       วันที่สั่งซื้อ/จอง
                     </label>
                     <Input
@@ -2018,7 +2036,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       วันที่เสนอราคา
                     </label>
                     <Input
@@ -2048,9 +2066,9 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                 </div>
 
                 {/* Deposit Section */}
-                <div className={`space-y-3 p-3 rounded-lg ${formData.paymentType === 'deposit' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 opacity-60'}`}>
+                <div className={`space-y-2 p-2.5 rounded-lg ${formData.paymentType === 'deposit' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 opacity-60'}`}>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       ภายในวันที่
                     </label>
                     <Input
@@ -2062,7 +2080,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       เรทเงินมัดจำ (ต่อคน)
                     </label>
                     <Select
@@ -2089,7 +2107,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       ชำระเพิ่มเติม
                     </label>
                     <Input
@@ -2114,7 +2132,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       จำนวนเงินที่ต้องชำระ
                     </label>
                     <Input
@@ -2153,9 +2171,9 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                 </div>
 
                 {/* Full Payment Section */}
-                <div className={`space-y-3 p-3 rounded-lg ${formData.paymentType === 'full' ? 'bg-green-50 border border-green-200' : 'bg-gray-50 opacity-60'}`}>
+                <div className={`space-y-2 p-2.5 rounded-lg ${formData.paymentType === 'full' ? 'bg-green-50 border border-green-200' : 'bg-gray-50 opacity-60'}`}>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       ภายในวันที่
                     </label>
                     <Input
@@ -2167,7 +2185,7 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       จำนวนเงิน
                     </label>
                     <Input
@@ -2190,12 +2208,12 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
             {/* VAT Mode */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2 font-semibold">
-                  <DollarSign className="w-5 h-5" />
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <DollarSign className="w-4 h-4" />
                   การคำนวณ VAT
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -2236,8 +2254,8 @@ export function QuotationForm({ mode, quotationId, initialData }: QuotationFormP
             {/* Summary */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2 font-semibold">
-                  <DollarSign className="w-5 h-5" />
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <DollarSign className="w-4 h-4" />
                   สรุปยอด
                 </div>
               </CardHeader>

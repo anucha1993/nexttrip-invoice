@@ -24,6 +24,8 @@ export async function GET(
         i.*,
         q.quotationNumber,
         c.name as customerName,
+        c.address as customerAddress,
+        c.taxId as customerTaxId,
         q.grandTotal as quotationGrandTotal
       FROM invoices i
       LEFT JOIN quotations q ON i.quotationId = q.id

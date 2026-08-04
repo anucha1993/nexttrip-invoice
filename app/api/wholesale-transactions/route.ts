@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { generateDocumentNumber } from '@/lib/helpers/document-number';
+import { markChecklistAuto } from '@/lib/checklist-auto';
 
 // GET /api/wholesale-transactions - List transactions
 export async function GET(request: NextRequest) {
@@ -254,6 +255,13 @@ export async function POST(request: NextRequest) {
     const insertedId = result.insertId;
     
     await connection.commit();
+
+    // Auto-check item 18 (ติดตามโอนเงินคืนจากโฮลเซลล์) once a REFUND lands as CONFIRMED
+    if (transactionType === 'REFUND' && initialStatus === 'CONFIRMED') {
+      await markChecklistAuto(Number(quotationId), 'WHOLESALE_REFUND_CONFIRMED', {
+        sourceRef: `wholesale_transaction:${insertedId}`,
+      });
+    }
     
     return NextResponse.json({
       success: true,

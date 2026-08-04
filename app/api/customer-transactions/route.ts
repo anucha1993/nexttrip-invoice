@@ -6,6 +6,7 @@ import pool from '@/lib/db';
 import { generateDocumentNumber } from '@/lib/helpers/document-number';
 import { LineOaService } from '@/lib/services/line-oa';
 import { getSlipUsage, formatSlipUsageList } from '@/lib/helpers/slip-usage';
+import { markChecklistAuto } from '@/lib/checklist-auto';
 
 // GET /api/customer-transactions - List transactions
 export async function GET(request: NextRequest) {
@@ -508,6 +509,13 @@ export async function POST(request: NextRequest) {
     }
     
     await connection.commit();
+
+    // Auto-check item 19 (คืนเงินลูกค้า) once a REFUND lands as CONFIRMED
+    if (transactionType === 'REFUND' && initialStatus === 'CONFIRMED') {
+      await markChecklistAuto(Number(quotationId), 'CUSTOMER_REFUND_CONFIRMED', {
+        sourceRef: `customer_transaction:${transactionId}`,
+      });
+    }
     
     // ส่งต่อสลิปไปยัง LINE OA แบบ best-effort (ไม่กระทบผลการบันทึก) — ทำทุกครั้งที่มีการแนบสลิป
     if (slipUrl) {
