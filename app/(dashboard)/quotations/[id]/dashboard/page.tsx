@@ -8,7 +8,7 @@ import {
   ArrowLeft, Pencil, FileText, Calendar, Users, DollarSign,
   Receipt, Wallet, ShoppingCart, TrendingUp, FileCheck, Upload, 
   ListChecks, PackageCheck, Plus, Eye, CheckCircle, Clock, Download,
-  Printer, XCircle, Trash2, ChevronDown, ChevronRight, User, CreditCard, ShieldCheck, Zap, Mail, Link2
+  Printer, XCircle, Trash2, ChevronDown, ChevronRight, User, CreditCard, ShieldCheck, Zap, Mail, Link2, Copy, Tag
 } from 'lucide-react';
 import Link from 'next/link';
 import InvoiceModal from '@/components/invoices/invoice-modal';
@@ -294,10 +294,10 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
         {activeTab === 'customer-payment' && <CustomerPaymentTab quotation={quotation} onPaymentChange={handlePaymentChange} refreshKey={paymentRefreshKey} />}
         {activeTab === 'wholesale-payment' && <WholesalePaymentTab quotation={quotation} />}
         {activeTab === 'tax' && <TaxTab quotation={quotation} />}
-        {activeTab === 'cost' && <CostTab />}
-        {activeTab === 'documents' && <DocumentsTab />}
+        {activeTab === 'cost' && <CostTab quotation={quotation} />}
+        {activeTab === 'documents' && <DocumentsTab quotation={quotation} />}
         {activeTab === 'wholesale-cost' && <WholesaleCostTab quotation={quotation} />}
-        {activeTab === 'profit' && <ProfitTab />}
+        {activeTab === 'profit' && <ProfitTab quotation={quotation} />}
         {activeTab === 'checklist' && (
           <ChecklistTab quotationId={resolvedParams.id} onStatusChange={fetchCommissionStatus} />
         )}
@@ -322,6 +322,233 @@ export default function QuotationDashboardPage({ params }: { params: Promise<{ i
 }
 
 // Tab Components (UI Only - Ready for Module Integration)
+
+// ===== Reusable: Dropdown ที่เพิ่มค่ากำหนดเอง (custom) ได้ =====
+// ใช้กับฟิลด์ที่เก็บเป็น VARCHAR อิสระ (ไม่ใช่ ENUM) เช่น costType, category
+// ผู้ใช้เลือกจากรายการที่กำหนดไว้ หรือเลือก "กำหนดเอง..." แล้วพิมพ์ข้อความเองได้
+function CreatableSelect({
+  value,
+  onChange,
+  options,
+  className = 'w-full border rounded-lg px-3 py-2',
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  className?: string;
+}) {
+  const isKnown = options.some((o) => o.value === value);
+  const [isCustom, setIsCustom] = useState(!isKnown && value !== '');
+
+  return (
+    <div className="space-y-2">
+      {!isCustom ? (
+        <select
+          className={className}
+          value={isKnown ? value : ''}
+          onChange={(e) => {
+            if (e.target.value === '__CUSTOM__') {
+              setIsCustom(true);
+              onChange('');
+            } else {
+              onChange(e.target.value);
+            }
+          }}
+        >
+          {!isKnown && <option value="" disabled>-- เลือกประเภท --</option>}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+          <option value="__CUSTOM__">✏️ กำหนดเอง...</option>
+        </select>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            className={className}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="พิมพ์ประเภทที่ต้องการ"
+            autoFocus
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 px-3"
+            onClick={() => {
+              setIsCustom(false);
+              onChange(options[0]?.value || '');
+            }}
+          >
+            ยกเลิก
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== Reusable: จัดการไฟล์แนบหลายไฟล์ (polymorphic entityType/entityId) =====
+function AttachmentsManager({
+  entityType,
+  entityId,
+  folder,
+  userId,
+  userName,
+}: {
+  entityType: 'GENERAL_COST' | 'WHOLESALE_COST' | 'PURCHASE_TAX';
+  entityId: number | null;
+  folder: string;
+  userId?: number | string | null;
+  userName?: string | null;
+}) {
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (entityId) fetchAttachments();
+  }, [entityId, entityType]);
+
+  const fetchAttachments = async () => {
+    if (!entityId) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/attachments?entityType=${entityType}&entityId=${entityId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAttachments(data.attachments || []);
+      }
+    } catch (error) {
+      console.error('Error fetching attachments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !entityId) return;
+
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('folder', folder);
+
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!uploadRes.ok) {
+          const uploadError = await uploadRes.json();
+          alert(uploadError.error || `ไม่สามารถอัพโหลด ${file.name} ได้`);
+          continue;
+        }
+        const uploadData = await uploadRes.json();
+
+        await fetch('/api/attachments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            entityType,
+            entityId,
+            fileName: file.name,
+            fileUrl: uploadData.url,
+            fileType: file.type,
+            createdById: userId,
+            createdByName: userName,
+          }),
+        });
+      }
+      await fetchAttachments();
+    } catch (error) {
+      console.error('Error uploading attachments:', error);
+      alert('เกิดข้อผิดพลาดในการอัพโหลดไฟล์');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDelete = async (attachmentId: number) => {
+    const confirmed = window.confirm('ต้องการลบไฟล์แนบนี้ใช่หรือไม่?');
+    if (!confirmed) return;
+    try {
+      const res = await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchAttachments();
+      } else {
+        alert('ไม่สามารถลบไฟล์ได้');
+      }
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
+    }
+  };
+
+  if (!entityId) {
+    return (
+      <p className="text-xs text-gray-500 italic">บันทึกรายการก่อน จึงจะแนบไฟล์เพิ่มเติมได้</p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium">ไฟล์แนบ (แนบได้หลายไฟล์)</label>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Plus className="w-3.5 h-3.5 mr-1" />
+          {uploading ? 'กำลังอัพโหลด...' : 'เพิ่มไฟล์'}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          multiple
+          className="hidden"
+          onChange={handleFilesSelected}
+        />
+      </div>
+
+      {loading ? (
+        <p className="text-xs text-gray-500">กำลังโหลด...</p>
+      ) : attachments.length === 0 ? (
+        <p className="text-xs text-gray-400">ยังไม่มีไฟล์แนบ</p>
+      ) : (
+        <ul className="space-y-1">
+          {attachments.map((att) => (
+            <li key={att.id} className="flex items-center justify-between gap-2 border rounded-lg px-3 py-2 bg-gray-50">
+              <a
+                href={att.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm truncate"
+              >
+                <FileText className="w-4 h-4 shrink-0" />
+                <span className="truncate">{att.fileName}</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => handleDelete(att.id)}
+                className="p-1 text-red-600 hover:bg-red-100 rounded cursor-pointer shrink-0"
+                title="ลบ"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function OverviewTab({ quotation }: { quotation: any }) {
   return (
@@ -480,9 +707,30 @@ function OverviewTab({ quotation }: { quotation: any }) {
 }
 
 function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId: string }) {
+  const router = useRouter();
   const [updating, setUpdating] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [showShareLink, setShowShareLink] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+
+  const handleDuplicate = async () => {
+    if (!confirm('ต้องการทำใบเสนอราคานี้ซ้ำหรือไม่? ระบบจะสร้างใบเสนอราคาใหม่โดยคัดลอกข้อมูลทัวร์และรายการสินค้าจากใบนี้')) return;
+    setDuplicating(true);
+    try {
+      const res = await fetch(`/api/quotations/${quotationId}/duplicate`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        router.push(`/quotations/${data.id}/edit`);
+      } else {
+        alert('เกิดข้อผิดพลาด: ' + (data.error || 'ทำใบเสนอราคาซ้ำไม่สำเร็จ'));
+      }
+    } catch (error) {
+      console.error('Error duplicating quotation:', error);
+      alert('เกิดข้อผิดพลาดในการทำใบเสนอราคาซ้ำ');
+    } finally {
+      setDuplicating(false);
+    }
+  };
 
   const statusOptions = [
     { value: 'PENDING', label: 'รอดำเนินการ', color: 'bg-yellow-500', textColor: 'text-yellow-700' },
@@ -612,6 +860,16 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
             <Link2 className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">สร้างลิงก์ PDF</span>
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs sm:text-sm"
+            onClick={handleDuplicate}
+            disabled={duplicating}
+          >
+            <Copy className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">{duplicating ? 'กำลังทำสำเนา...' : 'ทำใบเสนอราคาซ้ำ'}</span>
+          </Button>
         </div>
       </div>
 
@@ -652,7 +910,27 @@ function QuotationTab({ quotation, quotationId }: { quotation: any; quotationId:
           {/* Tour Info */}
           <Card>
             <CardHeader className="pb-2 sm:pb-3">
-              <h4 className="font-semibold text-purple-700 text-sm sm:text-base">ข้อมูลทัวร์</h4>
+              <div className="flex items-center gap-2">
+                <h4 className="font-semibold text-purple-700 text-sm sm:text-base">ข้อมูลทัวร์</h4>
+                {quotation.tourType === 'PROMOTION' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                    <Tag className="w-3 h-3" />
+                    {(() => {
+                      const pct = Math.round(Number(quotation.tourDiscountPercent) || 0);
+                      return pct > 0 ? `โปรส่วนลด ${pct}%` : (quotation.tourDiscountLabel || 'โปรโมชั่น');
+                    })()}
+                  </span>
+                )}
+                {quotation.tourType === 'FLASH_SALE' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                    <Zap className="w-3 h-3" />
+                    {(() => {
+                      const pct = Math.round(Number(quotation.tourDiscountPercent) || 0);
+                      return `โปรไฟไหม้ Flash Sale${pct > 0 ? ` -${pct}%` : ''}`;
+                    })()}
+                  </span>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
               <div>
@@ -4373,7 +4651,6 @@ function TaxTab({ quotation }: { quotation: any }) {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingTax, setEditingTax] = useState<any>(null);
-  const [uploading, setUploading] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -4463,36 +4740,6 @@ function TaxTab({ quotation }: { quotation: any }) {
     setShowModal(true);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const uploadFormData = new FormData();
-      uploadFormData.append('file', file);
-      uploadFormData.append('folder', 'purchase-taxes');
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: uploadFormData
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setFormData(prev => ({ ...prev, slipUrl: data.url }));
-      } else {
-        const uploadError = await response.json();
-        alert(uploadError.error || 'ไม่สามารถอัพโหลดไฟล์ได้');
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('เกิดข้อผิดพลาดในการอัพโหลด');
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const handleSubmit = async () => {
     if (!formData.referenceNumber || !formData.serviceAmount) {
       alert('กรุณากรอกเลขที่เอกสารและยอดค่าบริการ');
@@ -4519,8 +4766,11 @@ function TaxTab({ quotation }: { quotation: any }) {
 
       if (response.ok) {
         fetchPurchaseTaxes();
-        setShowModal(false);
-        resetForm();
+        if (!editingTax) {
+          // สร้างใหม่สำเร็จ -> เข้าสู่โหมดแก้ไขต่อ เพื่อให้แนบไฟล์เพิ่มเติมได้ทันที
+          const saved = await response.json();
+          setEditingTax(saved);
+        }
       } else {
         const error = await response.json();
         alert(error.error || 'เกิดข้อผิดพลาด');
@@ -4649,19 +4899,13 @@ function TaxTab({ quotation }: { quotation: any }) {
                       {parseFloat(tax.totalAmount).toLocaleString()} ฿
                     </td>
                     <td className="py-3 px-4 text-center">
-                      {tax.slipUrl ? (
-                        <a 
-                          href={tax.slipUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
-                        >
-                          <FileText className="w-3 h-3" />
-                          ไฟล์หลักฐาน
-                        </a>
-                      ) : (
-                        <span className="text-gray-400 text-xs">-</span>
-                      )}
+                      <button
+                        onClick={() => handleEditTax(tax)}
+                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs cursor-pointer"
+                      >
+                        <FileText className="w-3 h-3" />
+                        {Number(tax.attachmentCount) > 0 ? `${tax.attachmentCount} ไฟล์` : 'แนบไฟล์'}
+                      </button>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1 justify-center">
@@ -4697,7 +4941,7 @@ function TaxTab({ quotation }: { quotation: any }) {
               <h2 className="text-lg font-semibold">
                 {editingTax ? 'แก้ไขภาษีซื้อ' : 'เพิ่มภาษีซื้อ'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="p-1 hover:bg-gray-100 rounded-full">
+              <button onClick={() => { setShowModal(false); resetForm(); fetchPurchaseTaxes(); }} className="p-1 hover:bg-gray-100 rounded-full">
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
@@ -4859,42 +5103,20 @@ function TaxTab({ quotation }: { quotation: any }) {
               </div>
 
               {/* File Upload */}
-              <div>
-                <label className="block text-sm font-medium mb-1">แนบไฟล์ใบกำกับภาษี</label>
-                <input
-                  type="file"
-                  onChange={handleFileUpload}
-                  accept="image/*,.pdf"
-                  className="w-full px-3 py-2 border rounded-lg"
-                  disabled={uploading}
+              <div className="pt-2 border-t">
+                <AttachmentsManager
+                  entityType="PURCHASE_TAX"
+                  entityId={editingTax?.id ?? null}
+                  folder="purchase-taxes"
+                  userId={userId}
+                  userName={userName}
                 />
-                {uploading && <p className="text-xs text-gray-500 mt-1">กำลังอัพโหลด...</p>}
-                {formData.slipUrl && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-green-600" />
-                    <a 
-                      href={formData.slipUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:underline"
-                    >
-                      ดูไฟล์ที่อัพโหลด
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, slipUrl: '' }))}
-                      className="text-xs text-red-600 hover:underline"
-                    >
-                      ลบ
-                    </button>
-                  </div>
-                )}
               </div>
 
               {/* Actions */}
               <div className="flex gap-3 pt-4 border-t">
-                <Button variant="outline" onClick={() => setShowModal(false)} className="flex-1">
-                  ยกเลิก
+                <Button variant="outline" onClick={() => { setShowModal(false); resetForm(); fetchPurchaseTaxes(); }} className="flex-1">
+                  {editingTax ? 'เสร็จสิ้น' : 'ยกเลิก'}
                 </Button>
                 <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700">
                   {editingTax ? 'บันทึกการแก้ไข' : 'บันทึก'}
@@ -4908,7 +5130,140 @@ function TaxTab({ quotation }: { quotation: any }) {
   );
 }
 
-function CostTab() {
+function CostTab({ quotation }: { quotation: any }) {
+  const { userId, userName } = useCurrentUser();
+  const [costs, setCosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCostModal, setShowCostModal] = useState(false);
+  const [editingCostId, setEditingCostId] = useState<number | null>(null);
+  const [costAmount, setCostAmount] = useState('');
+  const [costType, setCostType] = useState('OTHER');
+  const [costDescription, setCostDescription] = useState('');
+  const [costNotes, setCostNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Cost type options (ต้นทุนทั่วไป แยกจากต้นทุนโฮลเซลล์) — เลือก "กำหนดเอง..." เพื่อพิมพ์ประเภทใหม่ได้
+  const costTypeOptions = [
+    { value: 'COMMISSION', label: 'ค่าคอมมิชชั่น' },
+    { value: 'TRANSPORT', label: 'ค่าเดินทาง/ที่พักพนักงาน' },
+    { value: 'OPERATION', label: 'ค่าดำเนินการ/ธนาคาร' },
+    { value: 'MARKETING', label: 'การตลาด' },
+    { value: 'MISC', label: 'เบ็ดเตล็ด' },
+    { value: 'OTHER', label: 'อื่นๆ' },
+  ];
+
+  const getCostTypeLabel = (type: string) => {
+    return costTypeOptions.find(o => o.value === type)?.label || type;
+  };
+
+  useEffect(() => {
+    fetchCosts();
+  }, [quotation.id]);
+
+  const fetchCosts = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/general-costs?quotationId=${quotation.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setCosts(data.costs || []);
+      }
+    } catch (error) {
+      console.error('Error fetching costs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalCost = costs.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+
+  const handleSaveCost = async () => {
+    if (!costAmount) {
+      alert('กรุณาระบุยอดเงิน');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const isEditing = editingCostId !== null;
+
+      const url = isEditing
+        ? `/api/general-costs/${editingCostId}`
+        : '/api/general-costs';
+
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quotationId: quotation.id,
+          costType: costType,
+          description: costDescription,
+          amount: parseFloat(parseFloat(costAmount).toFixed(2)),
+          notes: costNotes,
+          createdById: userId,
+          createdByName: userName,
+          updatedById: userId,
+          updatedByName: userName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        fetchCosts();
+        if (!isEditing && data.costId) {
+          // สร้างใหม่สำเร็จ -> เข้าสู่โหมดแก้ไขต่อ เพื่อให้แนบไฟล์เพิ่มเติมได้ทันที
+          setEditingCostId(data.costId);
+        }
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึก');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditCost = (cost: any) => {
+    setEditingCostId(cost.id);
+    setCostAmount(parseFloat(cost.amount || 0).toFixed(2));
+    setCostType(cost.costType || 'OTHER');
+    setCostDescription(cost.description || '');
+    setCostNotes(cost.notes || '');
+    setShowCostModal(true);
+  };
+
+  const handleDeleteCost = async (costId: number) => {
+    const confirmed = window.confirm('ต้องการลบรายการต้นทุนนี้ใช่หรือไม่? (ไฟล์แนบทั้งหมดจะถูกลบด้วย)');
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/general-costs/${costId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        fetchCosts();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('เกิดข้อผิดพลาดในการลบ');
+    }
+  };
+
+  const resetForm = () => {
+    setEditingCostId(null);
+    setCostAmount('');
+    setCostType('OTHER');
+    setCostDescription('');
+    setCostNotes('');
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -4917,7 +5272,11 @@ function CostTab() {
             <DollarSign className="w-5 h-5" />
             ระบบจัดการต้นทุน
           </h3>
-          <Button size="sm" className="text-xs sm:text-sm">
+          <Button
+            size="sm"
+            className="text-xs sm:text-sm"
+            onClick={() => setShowCostModal(true)}
+          >
             <Plus className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">เพิ่มรายการต้นทุน</span>
           </Button>
@@ -4928,21 +5287,292 @@ function CostTab() {
           <div className="p-3 sm:p-4 bg-purple-50 rounded-lg border border-purple-200">
             <div className="flex justify-between items-center">
               <span className="text-gray-600 text-xs sm:text-sm">ต้นทุนทั้งหมด</span>
-              <span className="text-lg sm:text-2xl font-bold text-purple-600">0 ฿</span>
+              <span className="text-lg sm:text-2xl font-bold text-purple-600">{totalCost.toLocaleString()} ฿</span>
             </div>
           </div>
-          <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
-            <DollarSign className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
-            <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการต้นทุน</p>
-            <p className="text-xs sm:text-sm mt-1">Module นี้พร้อมรอการพัฒนา</p>
-          </div>
+
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
+          ) : costs.length === 0 ? (
+            <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <DollarSign className="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium text-sm sm:text-base">ยังไม่มีรายการต้นทุน</p>
+              <p className="text-xs sm:text-sm mt-1">คลิกปุ่มเพิ่มรายการเพื่อเริ่มต้น</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-3 px-4 font-medium">ประเภท</th>
+                    <th className="text-left py-3 px-4 font-medium">รายละเอียด</th>
+                    <th className="text-right py-3 px-4 font-medium">ยอดเงิน</th>
+                    <th className="text-left py-3 px-4 font-medium">หมายเหตุ</th>
+                    <th className="text-center py-3 px-4 font-medium">ไฟล์แนบ</th>
+                    <th className="text-left py-3 px-4 font-medium">ผู้บันทึก</th>
+                    <th className="text-center py-3 px-4 font-medium">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {costs.map((cost) => (
+                    <tr key={cost.id} className="border-t hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                          {getCostTypeLabel(cost.costType)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">{cost.description || '-'}</td>
+                      <td className="py-3 px-4 text-right font-medium text-purple-600">
+                        {parseFloat(cost.amount).toLocaleString()} ฿
+                      </td>
+                      <td className="py-3 px-4 text-gray-600 text-xs">{cost.notes || '-'}</td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => handleEditCost(cost)}
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs cursor-pointer"
+                        >
+                          <FileText className="w-3 h-3" />
+                          {Number(cost.attachmentCount) > 0 ? `${cost.attachmentCount} ไฟล์` : 'แนบไฟล์'}
+                        </button>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600 text-xs">{cost.createdByName || '-'}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1 justify-center">
+                          <button
+                            onClick={() => handleEditCost(cost)}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                            title="แก้ไข"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCost(cost.id)}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                            title="ลบ"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </CardContent>
+
+      {/* Cost Modal */}
+      {showCostModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold text-purple-700">
+                {editingCostId ? 'แก้ไขต้นทุน' : 'เพิ่มต้นทุน'}
+              </h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">ประเภทต้นทุน *</label>
+                <CreatableSelect value={costType} onChange={setCostType} options={costTypeOptions} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">ยอดเงิน *</label>
+                <input
+                  type="number"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={costAmount}
+                  onChange={(e) => setCostAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">รายละเอียด</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={costDescription}
+                  onChange={(e) => setCostDescription(e.target.value)}
+                  placeholder="เช่น ค่าคอมมิชชั่นเซลล์"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">หมายเหตุ</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={costNotes}
+                  onChange={(e) => setCostNotes(e.target.value)}
+                  rows={2}
+                  placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
+                />
+              </div>
+
+              <div className="pt-2 border-t">
+                <AttachmentsManager
+                  entityType="GENERAL_COST"
+                  entityId={editingCostId}
+                  folder="general-costs"
+                  userId={userId}
+                  userName={userName}
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setShowCostModal(false); resetForm(); fetchCosts(); }}>
+                {editingCostId ? 'เสร็จสิ้น' : 'ยกเลิก'}
+              </Button>
+              <Button onClick={handleSaveCost} disabled={submitting}>
+                {submitting ? 'กำลังบันทึก...' : (editingCostId ? 'บันทึกการแก้ไข' : 'บันทึกต้นทุน')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
 
-function DocumentsTab() {
+function DocumentsTab({ quotation }: { quotation: any }) {
+  const { userId, userName } = useCurrentUser();
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingCategory, setPendingCategory] = useState('OTHER');
+
+  const categoryOptions = [
+    { value: 'PASSPORT', label: 'Passport', color: 'blue' },
+    { value: 'VISA', label: 'Visa', color: 'green' },
+    { value: 'INVOICE', label: 'ใบแจ้งหนี้', color: 'purple' },
+    { value: 'OTHER', label: 'อื่นๆ', color: 'orange' },
+  ];
+
+  const getCategoryInfo = (value: string) =>
+    categoryOptions.find((c) => c.value === value) || { value, label: value, color: 'gray' };
+
+  const customCategories = Array.from(
+    new Set(documents.map((d) => d.category).filter((cat) => !categoryOptions.some((c) => c.value === cat)))
+  );
+
+  const handleAddCustomCategory = () => {
+    const label = window.prompt('ระบุชื่อหมวดหมู่เอกสารที่ต้องการเพิ่ม เช่น สัญญาจ้าง, กรมธรรม์');
+    if (label && label.trim()) {
+      openUploadFor(label.trim());
+    }
+  };
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [quotation.id]);
+
+  const fetchDocuments = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/quotation-documents?quotationId=${quotation.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setDocuments(data.documents || []);
+      }
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const countByCategory = (cat: string) => documents.filter((d) => d.category === cat).length;
+
+  const openUploadFor = (category: string) => {
+    setPendingCategory(category);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'quotation-documents');
+
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const uploadError = await uploadRes.json();
+        alert(uploadError.error || 'ไม่สามารถอัพโหลดไฟล์ได้');
+        return;
+      }
+
+      const uploadData = await uploadRes.json();
+
+      const saveRes = await fetch('/api/quotation-documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quotationId: quotation.id,
+          category: pendingCategory,
+          fileName: file.name,
+          fileUrl: uploadData.url,
+          fileType: file.type,
+          createdById: userId,
+          createdByName: userName,
+        }),
+      });
+
+      if (saveRes.ok) {
+        fetchDocuments();
+      } else {
+        const error = await saveRes.json();
+        alert(error.error || 'เกิดข้อผิดพลาดในการบันทึกเอกสาร');
+      }
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      alert('เกิดข้อผิดพลาดในการอัพโหลดเอกสาร');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteDocument = async (docId: number) => {
+    const confirmed = window.confirm('ต้องการลบเอกสารนี้ใช่หรือไม่?');
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/quotation-documents/${docId}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        fetchDocuments();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'เกิดข้อผิดพลาดในการลบ');
+      }
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      alert('เกิดข้อผิดพลาดในการลบ');
+    }
+  };
+
+  const filteredDocuments = categoryFilter === 'ALL'
+    ? documents
+    : documents.filter((d) => d.category === categoryFilter);
+
+  const colorClasses: Record<string, { bg: string; border: string; text: string }> = {
+    blue: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600' },
+    green: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-600' },
+    purple: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600' },
+    orange: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600' },
+    gray: { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-600' },
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -4951,41 +5581,143 @@ function DocumentsTab() {
             <Upload className="w-5 h-5" />
             ระบบจัดเก็บเอกสาร
           </h3>
-          <Button size="sm" className="text-xs sm:text-sm">
+          <Button size="sm" className="text-xs sm:text-sm" disabled={uploading} onClick={() => openUploadFor('OTHER')}>
             <Upload className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">อัปโหลดเอกสาร</span>
+            <span className="hidden sm:inline">{uploading ? 'กำลังอัปโหลด...' : 'อัปโหลดเอกสาร'}</span>
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={handleFileSelected}
+          />
+
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            <div className="p-2 sm:p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
-              <FileText className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-blue-600" />
-              <p className="text-xs sm:text-sm font-medium">Passport</p>
-              <p className="text-xs text-gray-500">0 ไฟล์</p>
-            </div>
-            <div className="p-2 sm:p-4 bg-green-50 rounded-lg border border-green-200 text-center">
-              <FileText className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-green-600" />
-              <p className="text-xs sm:text-sm font-medium">Visa</p>
-              <p className="text-xs text-gray-500">0 ไฟล์</p>
-            </div>
-            <div className="p-2 sm:p-4 bg-purple-50 rounded-lg border border-purple-200 text-center">
-              <FileText className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-purple-600" />
-              <p className="text-xs sm:text-sm font-medium">ใบแจ้งหนี้</p>
-              <p className="text-xs text-gray-500">0 ไฟล์</p>
-            </div>
-            <div className="p-2 sm:p-4 bg-orange-50 rounded-lg border border-orange-200 text-center">
-              <FileText className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-orange-600" />
-              <p className="text-xs sm:text-sm font-medium">อื่นๆ</p>
-              <p className="text-xs text-gray-500">0 ไฟล์</p>
-            </div>
+            {categoryOptions.map((cat) => {
+              const c = colorClasses[cat.color];
+              return (
+                <button
+                  key={cat.value}
+                  onClick={() => setCategoryFilter(categoryFilter === cat.value ? 'ALL' : cat.value)}
+                  className={`p-2 sm:p-4 ${c.bg} rounded-lg border ${c.border} text-center cursor-pointer transition ${
+                    categoryFilter === cat.value ? 'ring-2 ring-offset-1 ring-gray-400' : ''
+                  }`}
+                >
+                  <FileText className={`w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 ${c.text}`} />
+                  <p className="text-xs sm:text-sm font-medium">{cat.label}</p>
+                  <p className="text-xs text-gray-500">{countByCategory(cat.value)} ไฟล์</p>
+                  <p
+                    className="text-[10px] sm:text-xs text-blue-600 hover:underline mt-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openUploadFor(cat.value);
+                    }}
+                  >
+                    + อัปโหลด
+                  </p>
+                </button>
+              );
+            })}
+            {customCategories.map((catValue) => (
+              <button
+                key={catValue}
+                onClick={() => setCategoryFilter(categoryFilter === catValue ? 'ALL' : catValue)}
+                className={`p-2 sm:p-4 bg-gray-50 rounded-lg border border-gray-200 text-center cursor-pointer transition ${
+                  categoryFilter === catValue ? 'ring-2 ring-offset-1 ring-gray-400' : ''
+                }`}
+              >
+                <FileText className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-gray-500" />
+                <p className="text-xs sm:text-sm font-medium">{catValue}</p>
+                <p className="text-xs text-gray-500">{countByCategory(catValue)} ไฟล์</p>
+                <p
+                  className="text-[10px] sm:text-xs text-blue-600 hover:underline mt-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openUploadFor(catValue);
+                  }}
+                >
+                  + อัปโหลด
+                </p>
+              </button>
+            ))}
+            <button
+              onClick={handleAddCustomCategory}
+              className="p-2 sm:p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center cursor-pointer hover:bg-gray-100 transition"
+            >
+              <Plus className="w-6 sm:w-8 h-6 sm:h-8 mx-auto mb-1 sm:mb-2 text-gray-400" />
+              <p className="text-xs sm:text-sm font-medium text-gray-600">หมวดหมู่กำหนดเอง</p>
+            </button>
           </div>
-          <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
-            <Upload className="w-12 sm:w-16 h-12 sm:h-16 mx-auto mb-4 text-gray-300" />
-            <p className="font-medium text-sm sm:text-base">ยังไม่มีเอกสาร</p>
-            <p className="text-xs sm:text-sm mt-2">Module นี้พร้อมรอการพัฒนา</p>
-          </div>
+
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="text-center py-6 sm:py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <Upload className="w-12 sm:w-16 h-12 sm:h-16 mx-auto mb-4 text-gray-300" />
+              <p className="font-medium text-sm sm:text-base">ยังไม่มีเอกสาร</p>
+              <p className="text-xs sm:text-sm mt-2">คลิก "อัปโหลดเอกสาร" หรือ "+ อัปโหลด" ในแต่ละหมวดเพื่อเริ่มต้น</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-3 px-4 font-medium">หมวดหมู่</th>
+                    <th className="text-left py-3 px-4 font-medium">ชื่อไฟล์</th>
+                    <th className="text-left py-3 px-4 font-medium">ผู้อัปโหลด</th>
+                    <th className="text-left py-3 px-4 font-medium">วันที่</th>
+                    <th className="text-center py-3 px-4 font-medium">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDocuments.map((doc) => {
+                    const info = getCategoryInfo(doc.category);
+                    const c = colorClasses[info.color];
+                    return (
+                      <tr key={doc.id} className="border-t hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${c.bg} ${c.text}`}>
+                            {info.label}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <a
+                            href={doc.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                          >
+                            <FileText className="w-3 h-3" />
+                            {doc.fileName}
+                          </a>
+                        </td>
+                        <td className="py-3 px-4 text-gray-600 text-xs">{doc.createdByName || '-'}</td>
+                        <td className="py-3 px-4 text-gray-600 text-xs">
+                          {new Date(doc.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1 justify-center">
+                            <button
+                              onClick={() => handleDeleteDocument(doc.id)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                              title="ลบ"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -5003,10 +5735,6 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
   const [costDescription, setCostDescription] = useState('');
   const [costNotes, setCostNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  // Slip/attachment states
-  const [slipFile, setSlipFile] = useState<File | null>(null);
-  const [slipPreview, setSlipPreview] = useState<string | null>(null);
 
   // Cost type options
   const costTypeOptions = [
@@ -5042,18 +5770,6 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
 
   const totalCost = costs.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
 
-  const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSlipFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSlipPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleSaveCost = async () => {
     if (!costAmount) {
       alert('กรุณาระบุยอดเงิน');
@@ -5063,29 +5779,6 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
     try {
       setSubmitting(true);
       const isEditing = editingCostId !== null;
-
-      // Upload slip if exists
-      let uploadedSlipUrl = null;
-      if (slipFile) {
-        const formData = new FormData();
-        formData.append('file', slipFile);
-        formData.append('folder', 'wholesale-costs');
-        
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          uploadedSlipUrl = uploadData.url;
-        } else {
-          const uploadError = await uploadRes.json();
-          alert(uploadError.error || 'ไม่สามารถอัพโหลดหลักฐานได้');
-          setSubmitting(false);
-          return;
-        }
-      }
 
       const url = isEditing 
         ? `/api/wholesale-costs/${editingCostId}` 
@@ -5102,7 +5795,6 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
           description: costDescription,
           amount: parseFloat(parseFloat(costAmount).toFixed(2)),
           notes: costNotes,
-          slipUrl: uploadedSlipUrl,
           createdById: userId,
           createdByName: userName,
           updatedById: userId,
@@ -5112,10 +5804,10 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
 
       if (response.ok) {
         const data = await response.json();
-        alert(data.message || (isEditing ? 'แก้ไขเรียบร้อย' : 'บันทึกเรียบร้อย'));
-        setShowCostModal(false);
-        resetForm();
         fetchCosts();
+        if (!isEditing && data.costId) {
+          setEditingCostId(data.costId);
+        }
       } else {
         const error = await response.json();
         alert(error.error || 'เกิดข้อผิดพลาด');
@@ -5134,13 +5826,11 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
     setCostType(cost.costType || 'OTHER');
     setCostDescription(cost.description || '');
     setCostNotes(cost.notes || '');
-    setSlipFile(null);
-    setSlipPreview(cost.slipUrl || null);
     setShowCostModal(true);
   };
 
   const handleDeleteCost = async (costId: number) => {
-    const confirmed = window.confirm('ต้องการลบรายการต้นทุนนี้ใช่หรือไม่?');
+    const confirmed = window.confirm('ต้องการลบรายการต้นทุนนี้ใช่หรือไม่? (ไฟล์แนบทั้งหมดจะถูกลบด้วย)');
     if (!confirmed) return;
 
     try {
@@ -5149,7 +5839,6 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
       });
 
       if (response.ok) {
-        alert('ลบเรียบร้อย');
         fetchCosts();
       } else {
         const error = await response.json();
@@ -5167,8 +5856,6 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
     setCostType('OTHER');
     setCostDescription('');
     setCostNotes('');
-    setSlipFile(null);
-    setSlipPreview(null);
   };
 
   return (
@@ -5240,19 +5927,13 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
                       </td>
                       <td className="py-3 px-4 text-gray-600 text-xs">{cost.notes || '-'}</td>
                       <td className="py-3 px-4 text-center">
-                        {cost.slipUrl ? (
-                          <a 
-                            href={cost.slipUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
-                          >
-                            <FileText className="w-3 h-3" />
-                            ไฟล์หลักฐาน
-                          </a>
-                        ) : (
-                          <span className="text-gray-400 text-xs">-</span>
-                        )}
+                        <button
+                          onClick={() => handleEditCost(cost)}
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs cursor-pointer"
+                        >
+                          <FileText className="w-3 h-3" />
+                          {Number(cost.attachmentCount) > 0 ? `${cost.attachmentCount} ไฟล์` : 'แนบไฟล์'}
+                        </button>
                       </td>
                       <td className="py-3 px-4 text-gray-600 text-xs">{cost.createdByName || '-'}</td>
                       <td className="py-3 px-4">
@@ -5285,7 +5966,7 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
       {/* Cost Modal */}
       {showCostModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b">
               <h3 className="text-lg font-semibold text-purple-700">
                 {editingCostId ? 'แก้ไขต้นทุน Wholesale' : 'เพิ่มต้นทุน Wholesale'}
@@ -5300,17 +5981,7 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">ประเภทต้นทุน *</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={costType}
-                  onChange={(e) => setCostType(e.target.value)}
-                >
-                  {costTypeOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <CreatableSelect value={costType} onChange={setCostType} options={costTypeOptions} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">ยอดเงิน *</label>
@@ -5342,41 +6013,20 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
                   placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">แนบหลักฐาน</label>
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  onChange={handleSlipChange}
+
+              <div className="pt-2 border-t">
+                <AttachmentsManager
+                  entityType="WHOLESALE_COST"
+                  entityId={editingCostId}
+                  folder="wholesale-costs"
+                  userId={userId}
+                  userName={userName}
                 />
-                {slipPreview && (
-                  <div className="mt-2">
-                    {slipFile?.type === 'application/pdf' ? (
-                      <div className="flex items-center gap-2 p-2 bg-gray-100 rounded border">
-                        <span className="text-red-600">📄</span>
-                        <span className="text-sm">{slipFile.name}</span>
-                      </div>
-                    ) : slipPreview.toLowerCase().endsWith('.pdf') ? (
-                      <a 
-                        href={slipPreview} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 p-2 bg-gray-100 rounded border text-blue-600 hover:text-blue-800"
-                      >
-                        <span className="text-red-600">📄</span>
-                        <span className="text-sm">ดูไฟล์ PDF ที่แนบไว้</span>
-                      </a>
-                    ) : (
-                      <img src={slipPreview} alt="Preview" className="max-w-full max-h-40 rounded border" />
-                    )}
-                  </div>
-                )}
               </div>
             </div>
             <div className="p-4 border-t flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => { setShowCostModal(false); resetForm(); }}>
-                ยกเลิก
+              <Button variant="outline" onClick={() => { setShowCostModal(false); resetForm(); fetchCosts(); }}>
+                {editingCostId ? 'เสร็จสิ้น' : 'ยกเลิก'}
               </Button>
               <Button onClick={handleSaveCost} disabled={submitting} className="bg-purple-600 hover:bg-purple-700">
                 {submitting ? 'กำลังบันทึก...' : (editingCostId ? 'บันทึกการแก้ไข' : 'บันทึกต้นทุน')}
@@ -5389,7 +6039,42 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
   );
 }
 
-function ProfitTab() {
+function ProfitTab({ quotation }: { quotation: any }) {
+  const [loading, setLoading] = useState(true);
+  const [wholesaleCostTotal, setWholesaleCostTotal] = useState(0);
+  const [generalCostTotal, setGeneralCostTotal] = useState(0);
+
+  useEffect(() => {
+    fetchTotals();
+  }, [quotation.id]);
+
+  const fetchTotals = async () => {
+    try {
+      setLoading(true);
+      const [wholesaleRes, generalRes] = await Promise.all([
+        fetch(`/api/wholesale-costs?quotationId=${quotation.id}`),
+        fetch(`/api/general-costs?quotationId=${quotation.id}`),
+      ]);
+      if (wholesaleRes.ok) {
+        const data = await wholesaleRes.json();
+        setWholesaleCostTotal(parseFloat(data.totalCost || 0));
+      }
+      if (generalRes.ok) {
+        const data = await generalRes.json();
+        setGeneralCostTotal(parseFloat(data.totalCost || 0));
+      }
+    } catch (error) {
+      console.error('Error fetching profit totals:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const revenue = parseFloat(quotation.grandTotal || 0);
+  const totalCost = wholesaleCostTotal + generalCostTotal;
+  const netProfit = revenue - totalCost;
+  const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   return (
     <Card>
       <CardHeader>
@@ -5399,45 +6084,45 @@ function ProfitTab() {
         </h3>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4 sm:space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            <div className="p-3 sm:p-6 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">รายได้รวม</p>
-              <p className="text-xl sm:text-3xl font-bold text-blue-600">0 ฿</p>
+        {loading ? (
+          <div className="text-center py-8 text-gray-500">กำลังโหลด...</div>
+        ) : (
+          <div className="space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div className="p-3 sm:p-6 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">รายได้รวม</p>
+                <p className="text-xl sm:text-3xl font-bold text-blue-600">{fmt(revenue)} ฿</p>
+              </div>
+              <div className="p-3 sm:p-6 bg-orange-50 rounded-lg border border-orange-200">
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">ต้นทุนรวม</p>
+                <p className="text-xl sm:text-3xl font-bold text-orange-600">{fmt(totalCost)} ฿</p>
+              </div>
+              <div className="p-3 sm:p-6 bg-green-50 rounded-lg border border-green-200 col-span-2 lg:col-span-1">
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">กำไรสุทธิ</p>
+                <p className={`text-xl sm:text-3xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(netProfit)} ฿</p>
+              </div>
             </div>
-            <div className="p-3 sm:p-6 bg-orange-50 rounded-lg border border-orange-200">
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">ต้นทุนรวม</p>
-              <p className="text-xl sm:text-3xl font-bold text-orange-600">0 ฿</p>
-            </div>
-            <div className="p-3 sm:p-6 bg-green-50 rounded-lg border border-green-200 col-span-2 lg:col-span-1">
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">กำไรสุทธิ</p>
-              <p className="text-xl sm:text-3xl font-bold text-green-600">0 ฿</p>
-            </div>
-          </div>
 
-          <div className="space-y-2 sm:space-y-3 bg-gray-50 p-3 sm:p-4 rounded-lg text-xs sm:text-sm">
-            <div className="flex justify-between py-2 border-b border-gray-200">
-              <span className="text-gray-600">รายได้จากลูกค้า</span>
-              <span className="font-medium">0 ฿</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-gray-200">
-              <span className="text-gray-600">- ต้นทุนโฮลเซลล์</span>
-              <span className="font-medium">0 ฿</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-gray-200">
-              <span className="text-gray-600">- ค่าใช้จ่ายอื่นๆ</span>
-              <span className="font-medium">0 ฿</span>
-            </div>
-            <div className="flex justify-between py-2 sm:py-3 border-t-2 border-gray-400">
-              <span className="font-semibold text-sm sm:text-lg">= กำไรสุทธิ</span>
-              <span className="font-bold text-sm sm:text-lg text-green-600">0 ฿</span>
+            <div className="space-y-2 sm:space-y-3 bg-gray-50 p-3 sm:p-4 rounded-lg text-xs sm:text-sm">
+              <div className="flex justify-between py-2 border-b border-gray-200">
+                <span className="text-gray-600">รายได้จากลูกค้า (ยอดใบเสนอราคา)</span>
+                <span className="font-medium">{fmt(revenue)} ฿</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-gray-200">
+                <span className="text-gray-600">- ต้นทุนโฮลเซลล์</span>
+                <span className="font-medium">{fmt(wholesaleCostTotal)} ฿</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-gray-200">
+                <span className="text-gray-600">- ค่าใช้จ่ายอื่นๆ</span>
+                <span className="font-medium">{fmt(generalCostTotal)} ฿</span>
+              </div>
+              <div className="flex justify-between py-2 sm:py-3 border-t-2 border-gray-400">
+                <span className="font-semibold text-sm sm:text-lg">= กำไรสุทธิ</span>
+                <span className={`font-bold text-sm sm:text-lg ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(netProfit)} ฿</span>
+              </div>
             </div>
           </div>
-
-          <div className="text-center py-4 text-gray-500">
-            <p className="text-xs sm:text-sm">Module นี้พร้อมรอการพัฒนา</p>
-          </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

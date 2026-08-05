@@ -29,8 +29,6 @@ export async function GET(
     if (error instanceof Response) return error;
     console.error('Error generating quotation PDF:', error);
     logPdfError('quotation pdf (authenticated)', error);
-    // TODO: ลบ debug field นี้ทิ้งหลังจากวินิจฉัยปัญหา production เสร็จ (ชั่วคราวเท่านั้น)
-    const debugMessage = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: 'สร้าง PDF ไม่สำเร็จ', debug: debugMessage }, { status: 500 });
+    return NextResponse.json({ error: 'สร้าง PDF ไม่สำเร็จ' }, { status: 500 });
   }
 }

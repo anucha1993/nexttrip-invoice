@@ -16,7 +16,8 @@ export async function GET(
     const quotations = await conn.query(
       `SELECT 
         q.id, q.quotationNumber, q.customerId, q.tourName, q.bookingCode, 
-        q.ntCode, q.customTourCode, q.tourType, q.countryId, q.airlineId, q.wholesaleId,
+        q.ntCode, q.customTourCode, q.tourType, q.tourDiscountLabel, q.tourDiscountPercent,
+        q.countryId, q.airlineId, q.wholesaleId,
         q.departureDate, q.returnDate, q.numDays, q.paxCount, q.saleId,
         q.quotationDate, q.validUntil, q.depositDueDate, 
         q.depositAmount, q.fullPaymentDueDate, q.fullPaymentAmount,

@@ -39,6 +39,8 @@ interface BookingPayload {
     airlineId?: number | null;
     airlineName?: string | null;
     tourType?: string | null;
+    tourDiscountLabel?: string | null;
+    tourDiscountPercent?: number | null;
   };
   travel?: {
     departureDate?: string | null;
@@ -314,6 +316,14 @@ export async function POST(request: NextRequest) {
     const tourType = ['NORMAL', 'PROMOTION', 'FLASH_SALE'].includes(rawTourType)
       ? rawTourType
       : 'NORMAL';
+    const tourDiscountLabel =
+      typeof payload.tour?.tourDiscountLabel === 'string' && payload.tour.tourDiscountLabel.trim() !== ''
+        ? payload.tour.tourDiscountLabel.slice(0, 150)
+        : null;
+    const tourDiscountPercent =
+      typeof payload.tour?.tourDiscountPercent === 'number' && Number.isFinite(payload.tour.tourDiscountPercent)
+        ? payload.tour.tourDiscountPercent
+        : null;
 
     const notesParts = [
       `Auto-created from booking ${bookingCode}`,
@@ -330,6 +340,7 @@ export async function POST(request: NextRequest) {
     const result = await conn.query(
       `INSERT INTO quotations (
         quotationNumber, customerId, tourName, bookingCode, bookingId, bookingSyncStatus, ntCode, customTourCode, tourType,
+        tourDiscountLabel, tourDiscountPercent,
         countryId, airlineId, wholesaleId, departureDate, returnDate,
         numDays, paxCount, saleId, quotationDate, validUntil,
         depositAmount, fullPaymentAmount,
@@ -338,7 +349,7 @@ export async function POST(request: NextRequest) {
         status, paymentStatus, notes, createdById,
         vatMode, preVatAmount, includeVatAmount, netPayable, noCost,
         createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [
         quotationNumber,
         customerId,
@@ -349,6 +360,8 @@ export async function POST(request: NextRequest) {
         ntCode,
         payload.tour?.wholesalerTourCode || null,
         tourType,
+        tourDiscountLabel,
+        tourDiscountPercent,
         countryId,
         airlineId,
         wholesaleId,

@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
     const rows = await connection.query(`
       SELECT 
         pt.*,
-        u.name as createdByName
+        u.name as createdByName,
+        (SELECT COUNT(*) FROM attachments a WHERE a.entityType = 'PURCHASE_TAX' AND a.entityId = pt.id) as attachmentCount
       FROM purchase_taxes pt
       LEFT JOIN user_accounts u ON pt.createdBy = u.id
       WHERE pt.quotationId = ?

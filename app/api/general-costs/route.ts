@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
-// GET - รายการต้นทุน Wholesale
+// GET - รายการต้นทุนทั่วไป
 export async function GET(request: NextRequest) {
   let connection;
   try {
@@ -14,11 +14,11 @@ export async function GET(request: NextRequest) {
     }
 
     const costs = await connection.query(
-      `SELECT wc.*,
-        (SELECT COUNT(*) FROM attachments a WHERE a.entityType = 'WHOLESALE_COST' AND a.entityId = wc.id) as attachmentCount
-       FROM wholesale_costs wc
-       WHERE wc.quotationId = ? 
-       ORDER BY wc.createdAt DESC`,
+      `SELECT gc.*,
+        (SELECT COUNT(*) FROM attachments a WHERE a.entityType = 'GENERAL_COST' AND a.entityId = gc.id) as attachmentCount
+       FROM general_costs gc
+       WHERE gc.quotationId = ? 
+       ORDER BY gc.createdAt DESC`,
       [quotationId]
     );
 
@@ -30,14 +30,14 @@ export async function GET(request: NextRequest) {
       totalCost,
     });
   } catch (error) {
-    console.error('Error fetching wholesale costs:', error);
-    return NextResponse.json({ error: 'Failed to fetch wholesale costs' }, { status: 500 });
+    console.error('Error fetching general costs:', error);
+    return NextResponse.json({ error: 'Failed to fetch general costs' }, { status: 500 });
   } finally {
     if (connection) connection.release();
   }
 }
 
-// POST - เพิ่มต้นทุน Wholesale
+// POST - เพิ่มต้นทุนทั่วไป
 export async function POST(request: NextRequest) {
   let connection;
   try {
@@ -45,8 +45,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       quotationId,
-      wholesaleId,
-      wholesaleName,
       costType,
       description,
       amount,
@@ -61,14 +59,12 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await connection.query(
-      `INSERT INTO wholesale_costs (
-        quotationId, wholesaleId, wholesaleName, costType, description, amount, notes, slipUrl,
+      `INSERT INTO general_costs (
+        quotationId, costType, description, amount, notes, slipUrl,
         createdById, createdByName, updatedById, updatedByName
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         quotationId,
-        wholesaleId || null,
-        wholesaleName || null,
         costType || 'OTHER',
         description || null,
         parseFloat(amount).toFixed(2),
@@ -89,8 +85,8 @@ export async function POST(request: NextRequest) {
       costId: Number(insertId),
     });
   } catch (error) {
-    console.error('Error creating wholesale cost:', error);
-    return NextResponse.json({ error: 'Failed to create wholesale cost' }, { status: 500 });
+    console.error('Error creating general cost:', error);
+    return NextResponse.json({ error: 'Failed to create general cost' }, { status: 500 });
   } finally {
     if (connection) connection.release();
   }

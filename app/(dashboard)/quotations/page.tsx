@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +10,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { 
   Plus, Search, FileText, Pencil, Trash2, Eye, 
   ChevronLeft, ChevronRight, Calendar, Users, 
-  Clock, CheckCircle, XCircle, Banknote, LayoutDashboard
+  Clock, CheckCircle, XCircle, Banknote, LayoutDashboard,
+  Zap, Tag, Copy
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -22,6 +24,9 @@ interface Quotation {
   bookingSyncStatus: 'PENDING_REVIEW' | 'CONVERTED' | null;
   ntCode: string | null;
   customTourCode: string | null;
+  tourType: 'NORMAL' | 'PROMOTION' | 'FLASH_SALE';
+  tourDiscountLabel: string | null;
+  tourDiscountPercent: string | number | null;
   departureDate: string | null;
   returnDate: string | null;
   numDays: string | null;
@@ -50,6 +55,37 @@ const statusOptions = [
   { value: 'COMPLETED', label: 'เสร็จสิ้น' },
 ];
 
+function TourTypeBadge({
+  tourType,
+  tourDiscountLabel,
+  tourDiscountPercent,
+}: {
+  tourType?: string | null;
+  tourDiscountLabel?: string | null;
+  tourDiscountPercent?: string | number | null;
+}) {
+  if (!tourType || tourType === 'NORMAL') return null;
+  const pct = Math.round(Number(tourDiscountPercent) || 0);
+  if (tourType === 'FLASH_SALE') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+        <Zap className="w-3 h-3" />
+        โปรไฟไหม้ Flash Sale{pct > 0 ? ` -${pct}%` : ''}
+      </span>
+    );
+  }
+  if (tourType === 'PROMOTION') {
+    const label = pct > 0 ? `โปรส่วนลด ${pct}%` : (tourDiscountLabel || 'โปรโมชั่น');
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+        <Tag className="w-3 h-3" />
+        {label}
+      </span>
+    );
+  }
+  return null;
+}
+
 const statusLabels: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   NEW: { label: 'ใหม่', color: 'bg-violet-700 text-white', icon: FileText },
   PENDING: { label: 'รอดำเนินการ', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
@@ -67,12 +103,14 @@ const paymentStatusLabels: Record<string, { label: string; color: string }> = {
 };
 
 export default function QuotationsPage() {
+  const router = useRouter();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -159,6 +197,25 @@ export default function QuotationsPage() {
       console.error('Error deleting quotation:', error);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleDuplicate = async (id: string) => {
+    if (!confirm('ต้องการทำใบเสนอราคานี้ซ้ำหรือไม่? ระบบจะสร้างใบเสนอราคาใหม่โดยคัดลอกข้อมูลทัวร์และรายการสินค้าจากใบนี้')) return;
+    setDuplicatingId(id);
+    try {
+      const res = await fetch(`/api/quotations/${id}/duplicate`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        router.push(`/quotations/${data.id}/edit`);
+      } else {
+        alert('เกิดข้อผิดพลาด: ' + (data.error || 'ทำใบเสนอราคาซ้ำไม่สำเร็จ'));
+      }
+    } catch (error) {
+      console.error('Error duplicating quotation:', error);
+      alert('เกิดข้อผิดพลาดในการทำใบเสนอราคาซ้ำ');
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -331,6 +388,16 @@ export default function QuotationsPage() {
                               <Eye className="w-4 h-4" />
                             </Button>
                           </Link>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="ทำใบเสนอราคาซ้ำ"
+                            disabled={duplicatingId === quotation.id}
+                            onClick={() => handleDuplicate(quotation.id)}
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
                           <Button 
                             variant="ghost" 
                             size="icon" 
@@ -351,7 +418,10 @@ export default function QuotationsPage() {
                       </div>
 
                       {/* Tour Name */}
-                      <div className="text-sm text-gray-700 line-clamp-2">{quotation.tourName}</div>
+                      <div className="text-sm text-gray-700 line-clamp-2 flex items-center gap-2">
+                        <span className="flex-1">{quotation.tourName}</span>
+                        <TourTypeBadge tourType={quotation.tourType} tourDiscountLabel={quotation.tourDiscountLabel} tourDiscountPercent={quotation.tourDiscountPercent} />
+                      </div>
 
                       {/* Date & PAX */}
                       <div className="flex items-center gap-4 text-sm">
@@ -424,11 +494,14 @@ export default function QuotationsPage() {
                         </TableCell>
                         <TableCell>
                           <div>
-                            <div 
-                              className="font-medium truncate max-w-xs cursor-help" 
-                              title={quotation.tourName}
-                            >
-                              {quotation.tourName}
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="font-medium truncate max-w-xs cursor-help" 
+                                title={quotation.tourName}
+                              >
+                                {quotation.tourName}
+                              </div>
+                              <TourTypeBadge tourType={quotation.tourType} tourDiscountLabel={quotation.tourDiscountLabel} tourDiscountPercent={quotation.tourDiscountPercent} />
                             </div>
                             <div className="text-xs text-gray-500">
                               {quotation.bookingCode && <span>BK: {quotation.bookingCode}</span>}
@@ -477,7 +550,15 @@ export default function QuotationsPage() {
                                 <Eye className="w-4 h-4" />
                               </Button>
                             </Link>
-                            
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="ทำใบเสนอราคาซ้ำ"
+                              disabled={duplicatingId === quotation.id}
+                              onClick={() => handleDuplicate(quotation.id)}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
                             <Button 
                               variant="ghost" 
                               size="icon" 
