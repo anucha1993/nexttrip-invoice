@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyQuotationShareToken } from '@/lib/quotation-share-token';
-import { generateQuotationPdf } from '@/lib/pdf/quotation-pdf';
+import { generateQuotationPdf, logPdfError } from '@/lib/pdf/quotation-pdf';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +49,7 @@ export async function GET(
     });
   } catch (error) {
     console.error('Error generating public quotation PDF:', error);
+    logPdfError('quotation pdf (public)', error);
     return errorPage('เกิดข้อผิดพลาดในการสร้าง PDF');
   }
 }

@@ -1,6 +1,8 @@
 // lib/pdf/quotation-pdf.ts
 // ดึงข้อมูลใบเสนอราคา + ตั้งค่าหัวเอกสาร แล้ว render เป็น PDF ด้วย Puppeteer
 
+import fs from 'fs';
+import path from 'path';
 import pool from '@/lib/db';
 import { CompanySettingService } from '@/lib/services/company-setting';
 import { fetchSale, fetchAirlines } from '@/lib/services/tour-api';
@@ -159,6 +161,21 @@ async function loadQuotationPdfData(id: string | number): Promise<QuotationPdfDa
     };
   } finally {
     if (conn) conn.release();
+  }
+}
+
+// เขียน error จริงลงไฟล์ในโปรเจกต์ (logs/pdf-error.log) เพื่อดูสาเหตุได้ง่ายบน production
+// โดยไม่ต้องพึ่ง log ของ Plesk/Passenger ที่หายาก
+export function logPdfError(context: string, error: unknown) {
+  try {
+    const logDir = path.join(process.cwd(), 'logs');
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    const logFile = path.join(logDir, 'pdf-error.log');
+    const timestamp = new Date().toISOString();
+    const detail = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
+    fs.appendFileSync(logFile, `[${timestamp}] ${context}\n${detail}\n\n`);
+  } catch {
+    // การเขียน log ล้มเหลวไม่ควรทำให้ request พัง — ignore
   }
 }
 
