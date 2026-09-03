@@ -32,6 +32,7 @@ export async function GET(
         c.email as customerEmail,
         c.phone as customerPhone,
         c.address as customerAddress,
+        c.notes as customerNotes,
         u.name as createdByName
       FROM quotations q
       LEFT JOIN customers c ON q.customerId = c.id

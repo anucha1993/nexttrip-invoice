@@ -6,7 +6,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { User, Building, CreditCard, Bell, Shield, Palette, ShieldCheck, MessageCircle, Landmark, ListChecks, FileText, Mail, Send } from 'lucide-react';
+import { User, Building, CreditCard, Bell, Shield, Palette, ShieldCheck, MessageCircle, Landmark, ListChecks, FileText, Mail, Send, Wallet, TrendingUp } from 'lucide-react';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('company');
@@ -95,6 +95,20 @@ export default function SettingsPage() {
               >
                 <Send className="w-5 h-5" />
                 <span className="font-medium">SMTP ผู้ส่งอีเมล</span>
+              </Link>
+              <Link
+                href="/settings/cost-categories"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <Wallet className="w-5 h-5" />
+                <span className="font-medium">ประเภทต้นทุน</span>
+              </Link>
+              <Link
+                href="/settings/formulas"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <TrendingUp className="w-5 h-5" />
+                <span className="font-medium">สูตรคำนวณ (แยกตามประเภทเอกสาร)</span>
               </Link>
             </nav>
           </Card>

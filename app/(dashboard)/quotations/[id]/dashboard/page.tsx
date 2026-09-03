@@ -14,6 +14,8 @@ import Link from 'next/link';
 import InvoiceModal from '@/components/invoices/invoice-modal';
 import QuillEditor from '@/components/ui/quill-editor';
 import { useCurrentUser } from '@/contexts/AuthContext';
+import { FORMULA_MODULES } from '@/lib/formula-modules';
+import { tryEvaluateFormula } from '@/lib/formula-engine';
 
 export default function QuotationDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -551,16 +553,45 @@ function AttachmentsManager({
 }
 
 function OverviewTab({ quotation }: { quotation: any }) {
+  const handleCopyBookInfo = async () => {
+    const honorifics = ['คุณ', 'นาย', 'นาง', 'นางสาว', 'ด.ช.', 'ด.ญ.', 'Mr.', 'Mrs.', 'Ms.', 'Miss'];
+    const rawName = quotation.customerName || '-';
+    const displayName = honorifics.some((h) => rawName.startsWith(h)) ? rawName : `คุณ ${rawName}`;
+
+    const text = [
+      'ข้อมูลลูกค้าจองทัวร์',
+      '1.ชื่อ-สกุล ภาษาไทย',
+      `(สำหรับผู้จอง 1 ท่าน ติดต่อประสานงาน) : ${displayName}`,
+      `2.เบอร์โทร : ${quotation.customerPhone || '-'}`,
+      `3.อีเมลล์ : ${quotation.customerEmail || '-'}`,
+      `หมายเหตุลูกค้า : ${quotation.customerNotes || '-'}`,
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('คัดลอกข้อมูลลูกค้าแล้ว!');
+    } catch (error) {
+      console.error('Copy book info failed:', error);
+      alert('คัดลอกไม่สำเร็จ');
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {/* Customer Info */}
         <Card>
           <CardHeader className="pb-2 sm:pb-4">
-            <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5" />
-              ข้อมูลลูกค้า
-            </h3>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+                ข้อมูลลูกค้า
+              </h3>
+              <Button size="sm" variant="outline" className="text-xs sm:text-sm" onClick={handleCopyBookInfo}>
+                <Copy className="w-3.5 h-3.5 sm:mr-1" />
+                <span className="hidden sm:inline">Copy book</span>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-2 sm:space-y-3">
             <div>
@@ -575,6 +606,12 @@ function OverviewTab({ quotation }: { quotation: any }) {
               <p className="text-xs sm:text-sm text-gray-600">อีเมล</p>
               <p className="font-medium text-sm sm:text-base break-all">{quotation.customerEmail || '-'}</p>
             </div>
+            {quotation.customerNotes && (
+              <div>
+                <p className="text-xs sm:text-sm text-gray-600">หมายเหตุลูกค้า</p>
+                <p className="font-medium text-sm sm:text-base whitespace-pre-wrap">{quotation.customerNotes}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -5142,15 +5179,17 @@ function CostTab({ quotation }: { quotation: any }) {
   const [costNotes, setCostNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Cost type options (ต้นทุนทั่วไป แยกจากต้นทุนโฮลเซลล์) — เลือก "กำหนดเอง..." เพื่อพิมพ์ประเภทใหม่ได้
-  const costTypeOptions = [
+  // Cost type options (ต้นทุนทั่วไป แยกจากต้นทุนโฮลเซลล์) — โหลดจาก
+  // /settings/cost-categories (scope=GENERAL) เพื่อให้ตั้งค่าเองได้โดยไม่ต้องแก้โค้ด
+  // ค่า default นี้ใช้เป็น fallback ระหว่างโหลด/กรณี API ล่ม เท่านั้น
+  const [costTypeOptions, setCostTypeOptions] = useState<{ value: string; label: string }[]>([
     { value: 'COMMISSION', label: 'ค่าคอมมิชชั่น' },
     { value: 'TRANSPORT', label: 'ค่าเดินทาง/ที่พักพนักงาน' },
     { value: 'OPERATION', label: 'ค่าดำเนินการ/ธนาคาร' },
     { value: 'MARKETING', label: 'การตลาด' },
     { value: 'MISC', label: 'เบ็ดเตล็ด' },
     { value: 'OTHER', label: 'อื่นๆ' },
-  ];
+  ]);
 
   const getCostTypeLabel = (type: string) => {
     return costTypeOptions.find(o => o.value === type)?.label || type;
@@ -5158,7 +5197,23 @@ function CostTab({ quotation }: { quotation: any }) {
 
   useEffect(() => {
     fetchCosts();
+    fetchCostTypeOptions();
   }, [quotation.id]);
+
+  const fetchCostTypeOptions = async () => {
+    try {
+      const response = await fetch('/api/settings/cost-categories?scope=GENERAL');
+      if (response.ok) {
+        const data = await response.json();
+        const active = (data.categories || []).filter((c: any) => c.isActive);
+        if (active.length > 0) {
+          setCostTypeOptions(active.map((c: any) => ({ value: c.key, label: c.label })));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching cost type options:', error);
+    }
+  };
 
   const fetchCosts = async () => {
     try {
@@ -5736,14 +5791,15 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
   const [costNotes, setCostNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Cost type options
-  const costTypeOptions = [
+  // Cost type options — โหลดจาก /settings/cost-categories (scope=WHOLESALE)
+  // ค่า default นี้ใช้เป็น fallback ระหว่างโหลด/กรณี API ล่ม เท่านั้น
+  const [costTypeOptions, setCostTypeOptions] = useState<{ value: string; label: string }[]>([
     { value: 'TOUR_TOTAL', label: 'ค่าทัวร์รวมทั้งหมด' },
     { value: 'ROOM', label: 'ค่าห้อง' },
     { value: 'FOOD', label: 'ค่าอาหาร' },
     { value: 'AIRLINE_TICKET', label: 'ค่าตั๋วเครื่องบิน' },
     { value: 'OTHER', label: 'อื่นๆ' },
-  ];
+  ]);
 
   const getCostTypeLabel = (type: string) => {
     return costTypeOptions.find(o => o.value === type)?.label || type;
@@ -5751,7 +5807,23 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
 
   useEffect(() => {
     fetchCosts();
+    fetchCostTypeOptions();
   }, [quotation.id]);
+
+  const fetchCostTypeOptions = async () => {
+    try {
+      const response = await fetch('/api/settings/cost-categories?scope=WHOLESALE');
+      if (response.ok) {
+        const data = await response.json();
+        const active = (data.categories || []).filter((c: any) => c.isActive);
+        if (active.length > 0) {
+          setCostTypeOptions(active.map((c: any) => ({ value: c.key, label: c.label })));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching cost type options:', error);
+    }
+  };
 
   const fetchCosts = async () => {
     try {
@@ -6040,12 +6112,15 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
 }
 
 function ProfitTab({ quotation }: { quotation: any }) {
+  const quotationModule = FORMULA_MODULES.QUOTATION;
   const [loading, setLoading] = useState(true);
   const [wholesaleCostTotal, setWholesaleCostTotal] = useState(0);
   const [generalCostTotal, setGeneralCostTotal] = useState(0);
+  const [expression, setExpression] = useState(quotationModule.defaultExpression);
 
   useEffect(() => {
     fetchTotals();
+    fetchFormulaConfig();
   }, [quotation.id]);
 
   const fetchTotals = async () => {
@@ -6070,18 +6145,57 @@ function ProfitTab({ quotation }: { quotation: any }) {
     }
   };
 
+  const fetchFormulaConfig = async () => {
+    try {
+      const res = await fetch(`/api/settings/formulas/${quotationModule.key}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.expression === 'string' && data.expression.trim()) {
+          setExpression(data.expression);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching profit formula config:', error);
+    }
+  };
+
   const revenue = parseFloat(quotation.grandTotal || 0);
   const totalCost = wholesaleCostTotal + generalCostTotal;
-  const netProfit = revenue - totalCost;
+
+  // ค่าจริงของแต่ละตัวแปรที่สูตร (ตั้งค่าใน /settings/formulas/QUOTATION) อ้างอิงได้ —
+  // ชื่อ code ตรงนี้ต้องตรงกับ FORMULA_MODULES.QUOTATION.variables ทุกตัว
+  const variableValues: Record<string, number> = {
+    SALE_TOTAL: revenue,
+    WHOLESALE_COST: wholesaleCostTotal,
+    GENERAL_COST: generalCostTotal,
+    COMMISSION: parseFloat(quotation.commission || 0),
+    WITHHOLDING_TAX: parseFloat(quotation.withholdingTax || 0),
+    SUBTOTAL: parseFloat(quotation.subtotal || 0),
+    DISCOUNT_AMOUNT: parseFloat(quotation.discountAmount || 0),
+    VAT_EXEMPT_AMOUNT: parseFloat(quotation.vatExemptAmount || 0),
+    PRE_TAX_AMOUNT: parseFloat(quotation.preTaxAmount || 0),
+    PRE_VAT_AMOUNT: parseFloat(quotation.preVatAmount || 0),
+    VAT_AMOUNT: parseFloat(quotation.vatAmount || 0),
+    INCLUDE_VAT_AMOUNT: parseFloat(quotation.includeVatAmount || 0),
+    NET_PAYABLE: parseFloat(quotation.netPayable || 0),
+  };
+
+  const result = tryEvaluateFormula(expression, variableValues);
+  const netProfit = result.ok ? result.value : 0;
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <Card>
       <CardHeader>
-        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-          <TrendingUp className="w-5 h-5" />
-          สรุปกำไร-ขาดทุน
-        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            สรุปกำไร-ขาดทุน
+          </h3>
+          <Link href={`/settings/formulas/${quotationModule.key}`} className="text-xs text-blue-600 hover:underline whitespace-nowrap">
+            ตั้งค่าสูตรคำนวณ
+          </Link>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -6103,19 +6217,23 @@ function ProfitTab({ quotation }: { quotation: any }) {
               </div>
             </div>
 
+            {!result.ok && (
+              <div className="text-sm bg-red-50 border border-red-200 rounded-lg p-3 text-red-700">
+                สูตรคำนวณกำไรสุทธิผิดพลาด: {result.error} — <Link href={`/settings/formulas/${quotationModule.key}`} className="underline">แก้ไขสูตร</Link>
+              </div>
+            )}
+
             <div className="space-y-2 sm:space-y-3 bg-gray-50 p-3 sm:p-4 rounded-lg text-xs sm:text-sm">
               <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-600">รายได้จากลูกค้า (ยอดใบเสนอราคา)</span>
-                <span className="font-medium">{fmt(revenue)} ฿</span>
+                <span className="text-gray-600 font-mono">สูตรที่ใช้</span>
+                <span className="font-mono text-gray-500 break-all text-right">{expression}</span>
               </div>
-              <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-600">- ต้นทุนโฮลเซลล์</span>
-                <span className="font-medium">{fmt(wholesaleCostTotal)} ฿</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-600">- ค่าใช้จ่ายอื่นๆ</span>
-                <span className="font-medium">{fmt(generalCostTotal)} ฿</span>
-              </div>
+              {quotationModule.variables.map((v) => (
+                <div key={v.code} className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="text-gray-600">{v.label}</span>
+                  <span className="font-medium">{fmt(variableValues[v.code] || 0)} ฿</span>
+                </div>
+              ))}
               <div className="flex justify-between py-2 sm:py-3 border-t-2 border-gray-400">
                 <span className="font-semibold text-sm sm:text-lg">= กำไรสุทธิ</span>
                 <span className={`font-bold text-sm sm:text-lg ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(netProfit)} ฿</span>
