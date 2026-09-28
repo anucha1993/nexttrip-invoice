@@ -1,0 +1,23 @@
+[2026-09-28T03:09:01.360Z] quotation pdf (authenticated)
+(conn:-1, no: 45028, SQLState: HY000) pool timeout: failed to retrieve a connection from pool after 10014ms
+    (pool connections: active=0 idle=0 limit=10)
+SqlError: (conn:-1, no: 45028, SQLState: HY000) pool timeout: failed to retrieve a connection from pool after 10014ms
+    (pool connections: active=0 idle=0 limit=10)
+    at module.exports.module.exports.createError (D:\Programing\tour-manager\nexttrip-invoice\.next\dev\server\chunks\node_modules_mariadb_15680b29._.js:1379:23)
+    at Pool._rejectTimedOutRequest (D:\Programing\tour-manager\nexttrip-invoice\.next\dev\server\chunks\node_modules_mariadb_15680b29._.js:13733:37)
+    at Pool._checkRequestTimeouts (D:\Programing\tour-manager\nexttrip-invoice\.next\dev\server\chunks\node_modules_mariadb_15680b29._.js:13708:22)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+
+[2026-09-28T03:21:50.814Z] quotation pdf (authenticated)
+(conn:-1, no: 45028, SQLState: HY000) pool timeout: failed to retrieve a connection from pool after 10008ms
+    (pool connections: active=0 idle=0 limit=10)
+SqlError: (conn:-1, no: 45028, SQLState: HY000) pool timeout: failed to retrieve a connection from pool after 10008ms
+    (pool connections: active=0 idle=0 limit=10)
+    at module.exports.module.exports.createError (D:\Programing\tour-manager\nexttrip-invoice\.next\dev\server\chunks\node_modules_mariadb_15680b29._.js:1379:23)
+    at Pool._rejectTimedOutRequest (D:\Programing\tour-manager\nexttrip-invoice\.next\dev\server\chunks\node_modules_mariadb_15680b29._.js:13733:37)
+    at Pool._checkRequestTimeouts (D:\Programing\tour-manager\nexttrip-invoice\.next\dev\server\chunks\node_modules_mariadb_15680b29._.js:13708:22)
+    at Timeout._onTimeout (D:\Programing\tour-manager\nexttrip-invoice\.next\dev\server\chunks\node_modules_mariadb_15680b29._.js:13742:54)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+

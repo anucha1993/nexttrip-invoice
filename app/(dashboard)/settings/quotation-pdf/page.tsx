@@ -19,6 +19,7 @@ interface LetterheadSettings {
   quotation_pdf_company_phone: string;
   quotation_pdf_company_hotline: string;
   quotation_pdf_company_license: string;
+  quotation_pdf_company_tax_id: string;
   quotation_pdf_company_website: string;
   quotation_pdf_company_email: string;
   quotation_pdf_bank_name: string;
@@ -37,6 +38,7 @@ const EMPTY: LetterheadSettings = {
   quotation_pdf_company_phone: '',
   quotation_pdf_company_hotline: '',
   quotation_pdf_company_license: '',
+  quotation_pdf_company_tax_id: '',
   quotation_pdf_company_website: '',
   quotation_pdf_company_email: '',
   quotation_pdf_bank_name: '',
@@ -245,6 +247,11 @@ export default function QuotationPdfSettingsPage() {
             label="เลขที่ใบอนุญาต (TAT / TTAA)"
             value={form.quotation_pdf_company_license}
             onChange={(e) => set('quotation_pdf_company_license', e.target.value)}
+          />
+          <Input
+            label="เลขประจำตัวผู้เสียภาษี (บริษัท)"
+            value={form.quotation_pdf_company_tax_id}
+            onChange={(e) => set('quotation_pdf_company_tax_id', e.target.value)}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input

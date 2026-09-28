@@ -185,6 +185,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof Response) return error; // requireAuth() throws a 401 Response, not an Error
     console.error('❌ Error fetching quotations:', error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
@@ -339,6 +340,7 @@ export async function POST(request: NextRequest) {
       quotationNumber,
     });
   } catch (error) {
+    if (error instanceof Response) return error; // requireAuth() throws a 401 Response, not an Error
     console.error('Error creating quotation:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(

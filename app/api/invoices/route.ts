@@ -33,7 +33,8 @@ export async function GET(request: NextRequest) {
         q.tourName,
         q.customerId,
         cust.name as customerName,
-        cust.code as customerCode
+        cust.code as customerCode,
+        (SELECT COUNT(*) FROM attachments a WHERE a.entityType = 'INVOICE' AND a.entityId = i.id) as attachmentCount
       FROM invoices i
       LEFT JOIN quotations q ON i.quotationId = q.id
       LEFT JOIN customers cust ON q.customerId = cust.id
@@ -149,6 +150,8 @@ export async function GET(request: NextRequest) {
       discountAmount: parseFloat(inv.discountAmount) || 0,
       paidAmount: parseFloat(inv.paidAmount) || 0,
       refundedAmount: parseFloat(inv.refundedAmount) || 0,
+      withholdingTax: parseFloat(inv.withholdingTax) || 0,
+      attachmentCount: Number(inv.attachmentCount) || 0,
       items: itemsMap[Number(inv.id)] || [],
       customer: {
         id: inv.customerId ? Number(inv.customerId) : null,

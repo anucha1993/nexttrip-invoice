@@ -372,14 +372,14 @@ export default function TaxInvoicesPage() {
                         {openMenu === invoice.id && (
                           <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-10">
                             <button 
-                              onClick={() => router.push(`/invoices/${invoice.id}`)}
+                              onClick={() => window.open(`/api/invoices/${invoice.id}/pdf?type=tax`, '_blank')}
                               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors"
                             >
                               <Eye className="w-4 h-4" />
                               ดูรายละเอียด
                             </button>
                             <button 
-                              onClick={() => alert('พิมพ์ใบกำกับภาษี')}
+                              onClick={() => window.open(`/api/invoices/${invoice.id}/pdf?type=tax`, '_blank')}
                               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors"
                             >
                               <Printer className="w-4 h-4" />

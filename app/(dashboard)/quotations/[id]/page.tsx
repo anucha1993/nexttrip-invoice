@@ -137,8 +137,7 @@ export default function ViewQuotationPage({ params }: { params: Promise<{ id: st
 
   const handleInvoiceSuccess = (invoiceId: number) => {
     setShowInvoiceModal(false);
-    // Redirect to invoice view page (when we create it)
-    router.push(`/invoices/${invoiceId}`);
+    router.push(`/invoices/${invoiceId}/edit`);
   };
 
   const formatNumber = (num: number) => {

@@ -14,8 +14,6 @@ import Link from 'next/link';
 import InvoiceModal from '@/components/invoices/invoice-modal';
 import QuillEditor from '@/components/ui/quill-editor';
 import { useCurrentUser } from '@/contexts/AuthContext';
-import { FORMULA_MODULES } from '@/lib/formula-modules';
-import { tryEvaluateFormula } from '@/lib/formula-engine';
 
 export default function QuotationDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -400,7 +398,7 @@ function AttachmentsManager({
   userId,
   userName,
 }: {
-  entityType: 'GENERAL_COST' | 'WHOLESALE_COST' | 'PURCHASE_TAX';
+  entityType: 'GENERAL_COST' | 'WHOLESALE_COST' | 'PURCHASE_TAX' | 'INVOICE';
   entityId: number | null;
   folder: string;
   userId?: number | string | null;
@@ -1523,7 +1521,7 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
                         <div className="flex items-center gap-1">
                           <button
                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                            onClick={() => window.open(`/invoices/${invoice.id}`, '_blank')}
+                            onClick={() => window.open(`/api/invoices/${invoice.id}/pdf`, '_blank')}
                           >
                             <Eye className="w-4 h-4" />
                           </button>
@@ -1609,7 +1607,7 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
                               <div className="flex items-center justify-center gap-1">
                                 <button
                                   className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors cursor-pointer"
-                                  onClick={() => window.open(`/invoices/${invoice.id}`, '_blank')}
+                                  onClick={() => window.open(`/api/invoices/${invoice.id}/pdf`, '_blank')}
                                   title="ดู"
                                 >
                                   <Eye className="w-4 h-4" />
@@ -1623,7 +1621,7 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
                                 </button>
                                 <button
                                   className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors cursor-pointer"
-                                  onClick={() => alert('พิมพ์ Invoice')}
+                                  onClick={() => window.open(`/api/invoices/${invoice.id}/pdf`, '_blank')}
                                   title="พิมพ์"
                                 >
                                   <Printer className="w-4 h-4" />
@@ -1720,6 +1718,23 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
                                       </div>
                                     </div>
                                   </div>
+
+                                  {/* หลักฐานใบหัก ณ ที่จ่ายจากลูกค้า - มีผลต่อสูตรกำไรสุทธิ (ดูรายละเอียดใน tab กำไร) */}
+                                  {parseFloat(invoice.withholdingTax || 0) > 0 && (
+                                    <div className="bg-white rounded-lg border p-3">
+                                      <div className="text-xs text-gray-600 mb-2">
+                                        <span className="font-medium text-gray-700">หลักฐานใบหัก ณ ที่จ่ายจากลูกค้า</span>
+                                        {' '}(ลูกค้าหักภาษี ณ ที่จ่าย {parseFloat(invoice.withholdingTax || 0).toLocaleString()} ฿ — หากไม่มีไฟล์แนบ จะถูกนับเป็นต้นทุนในสูตรกำไรสุทธิ ถ้ามีไฟล์แนบจะไม่นับเป็นต้นทุน)
+                                      </div>
+                                      <AttachmentsManager
+                                        entityType="INVOICE"
+                                        entityId={invoice.id}
+                                        folder="invoices/withholding-cert"
+                                        userId={userId}
+                                        userName={userName}
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -1819,14 +1834,14 @@ function InvoiceTab({ quotation, onCreateInvoice, refreshKey }: { quotation: any
                                           <div className="flex items-center justify-center gap-1">
                                             <button
                                               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
-                                              onClick={() => window.open(`/invoices/${invoice.id}`, '_blank')}
+                                              onClick={() => window.open(`/api/invoices/${invoice.id}/pdf?type=tax`, '_blank')}
                                               title="ดู"
                                             >
                                               <Eye className="w-4 h-4" />
                                             </button>
                                             <button
                                               className="p-1.5 text-green-600 hover:bg-green-50 rounded cursor-pointer"
-                                              onClick={() => alert('พิมพ์ใบกำกับภาษี')}
+                                              onClick={() => window.open(`/api/invoices/${invoice.id}/pdf?type=tax`, '_blank')}
                                               title="พิมพ์"
                                             >
                                               <Printer className="w-4 h-4" />
@@ -3094,10 +3109,17 @@ function CustomerPaymentTab({ quotation, onPaymentChange, refreshKey }: { quotat
                           )}
                           {tx.status !== 'CANCELLED' && (
                             <>
-                              {/* Print button - mock up */}
-                              {tx.status === 'CONFIRMED' && (
+                              {/* Print receipt (PAYMENT) or credit note (REFUND) */}
+                              {tx.status === 'CONFIRMED' && (tx.receiptId || tx.creditNoteId) && (
                                 <button
-                                  onClick={() => alert('ฟีเจอร์พิมพ์เอกสารกำลังพัฒนา')}
+                                  onClick={() =>
+                                    window.open(
+                                      tx.receiptId
+                                        ? `/api/receipts/${tx.receiptId}/pdf`
+                                        : `/api/credit-notes/${tx.creditNoteId}/pdf`,
+                                      '_blank'
+                                    )
+                                  }
                                   className="p-1 text-purple-600 hover:bg-purple-50 rounded cursor-pointer"
                                   title="พิมพ์"
                                 >
@@ -6112,23 +6134,26 @@ function WholesaleCostTab({ quotation }: { quotation: any }) {
 }
 
 function ProfitTab({ quotation }: { quotation: any }) {
-  const quotationModule = FORMULA_MODULES.QUOTATION;
   const [loading, setLoading] = useState(true);
   const [wholesaleCostTotal, setWholesaleCostTotal] = useState(0);
   const [generalCostTotal, setGeneralCostTotal] = useState(0);
-  const [expression, setExpression] = useState(quotationModule.defaultExpression);
+  const [purchaseTaxCost, setPurchaseTaxCost] = useState(0);
+  const [saleTaxCost, setSaleTaxCost] = useState(0);
+  const [saleVatTotal, setSaleVatTotal] = useState(0);
+  const [saleWithholdingCounted, setSaleWithholdingCounted] = useState(0);
 
   useEffect(() => {
     fetchTotals();
-    fetchFormulaConfig();
   }, [quotation.id]);
 
   const fetchTotals = async () => {
     try {
       setLoading(true);
-      const [wholesaleRes, generalRes] = await Promise.all([
+      const [wholesaleRes, generalRes, purchaseTaxRes, invoiceRes] = await Promise.all([
         fetch(`/api/wholesale-costs?quotationId=${quotation.id}`),
         fetch(`/api/general-costs?quotationId=${quotation.id}`),
+        fetch(`/api/purchase-taxes?quotationId=${quotation.id}`),
+        fetch(`/api/invoices?quotationId=${quotation.id}`),
       ]);
       if (wholesaleRes.ok) {
         const data = await wholesaleRes.json();
@@ -6138,6 +6163,43 @@ function ProfitTab({ quotation }: { quotation: any }) {
         const data = await generalRes.json();
         setGeneralCostTotal(parseFloat(data.totalCost || 0));
       }
+
+      // ต้นทุนภาษีซื้อ (จากรายการในแท็บ "ภาษี") — อ้างอิงสูตรจากระบบเดิม (quotationModel::getTotalOtherCost):
+      // - ถ้ารายการยังไม่มีไฟล์แนบ (เช่น ใบหัก ณ ที่จ่ายที่ออกให้โฮลเซลล์) -> นับเป็นต้นทุน = VAT + ภาษีหัก ณ ที่จ่าย
+      // - ถ้ามีไฟล์แนบแล้ว -> นับเป็นต้นทุนเพียง VAT - ภาษีหัก ณ ที่จ่าย (เพราะภาษีหัก ณ ที่จ่ายมีเอกสารยืนยันแล้ว ไม่ถือเป็นต้นทุนสูญเปล่า)
+      if (purchaseTaxRes.ok) {
+        const rows = await purchaseTaxRes.json();
+        const total = (Array.isArray(rows) ? rows : []).reduce((sum: number, pt: any) => {
+          if (pt.status === 'CANCELLED') return sum;
+          const vat = parseFloat(pt.vatAmount || 0);
+          const wht = parseFloat(pt.withholdingTaxAmount || 0);
+          const hasFile = Number(pt.attachmentCount || 0) > 0;
+          return sum + (hasFile ? (vat - wht) : (vat + wht));
+        }, 0);
+        setPurchaseTaxCost(total);
+      }
+
+      // ต้นทุนภาษีขาย/หัก ณ ที่จ่ายลูกค้า (จากใบแจ้งหนี้ที่ยังไม่ยกเลิก) — อ้างอิงสูตรจากระบบเดิม (invoiceModel/quotationModel::getTotalOtherCost):
+      // - ถ้าใบแจ้งหนี้ยังไม่มีไฟล์แนบ (ใบหัก ณ ที่จ่ายจากลูกค้า) -> นับ VAT ขาย + ภาษีหัก ณ ที่จ่ายที่ลูกค้าหักเราเป็นต้นทุน (เพราะไม่มีเอกสารไปยื่นขอคืน)
+      // - ถ้ามีไฟล์แนบแล้ว -> นับเฉพาะ VAT ขายเป็นต้นทุน (ภาษีหัก ณ ที่จ่ายมีเอกสารยืนยัน ไม่ถือเป็นต้นทุนสูญเปล่า)
+      if (invoiceRes.ok) {
+        const data = await invoiceRes.json();
+        const activeInvoices = (data.invoices || []).filter(
+          (inv: any) => inv.status !== 'CANCELLED' && inv.status !== 'VOIDED'
+        );
+        let vatSum = 0;
+        let whtCountedSum = 0;
+        for (const inv of activeInvoices) {
+          const vat = parseFloat(inv.vatAmount || 0);
+          const wht = parseFloat(inv.withholdingTax || 0);
+          const hasFile = Number(inv.attachmentCount || 0) > 0;
+          vatSum += vat;
+          whtCountedSum += hasFile ? 0 : wht;
+        }
+        setSaleVatTotal(vatSum);
+        setSaleWithholdingCounted(whtCountedSum);
+        setSaleTaxCost(vatSum + whtCountedSum);
+      }
     } catch (error) {
       console.error('Error fetching profit totals:', error);
     } finally {
@@ -6145,43 +6207,13 @@ function ProfitTab({ quotation }: { quotation: any }) {
     }
   };
 
-  const fetchFormulaConfig = async () => {
-    try {
-      const res = await fetch(`/api/settings/formulas/${quotationModule.key}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (typeof data.expression === 'string' && data.expression.trim()) {
-          setExpression(data.expression);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching profit formula config:', error);
-    }
-  };
-
   const revenue = parseFloat(quotation.grandTotal || 0);
-  const totalCost = wholesaleCostTotal + generalCostTotal;
+  const totalTaxCost = purchaseTaxCost + saleTaxCost;
+  const totalCost = wholesaleCostTotal + generalCostTotal + totalTaxCost;
 
-  // ค่าจริงของแต่ละตัวแปรที่สูตร (ตั้งค่าใน /settings/formulas/QUOTATION) อ้างอิงได้ —
-  // ชื่อ code ตรงนี้ต้องตรงกับ FORMULA_MODULES.QUOTATION.variables ทุกตัว
-  const variableValues: Record<string, number> = {
-    SALE_TOTAL: revenue,
-    WHOLESALE_COST: wholesaleCostTotal,
-    GENERAL_COST: generalCostTotal,
-    COMMISSION: parseFloat(quotation.commission || 0),
-    WITHHOLDING_TAX: parseFloat(quotation.withholdingTax || 0),
-    SUBTOTAL: parseFloat(quotation.subtotal || 0),
-    DISCOUNT_AMOUNT: parseFloat(quotation.discountAmount || 0),
-    VAT_EXEMPT_AMOUNT: parseFloat(quotation.vatExemptAmount || 0),
-    PRE_TAX_AMOUNT: parseFloat(quotation.preTaxAmount || 0),
-    PRE_VAT_AMOUNT: parseFloat(quotation.preVatAmount || 0),
-    VAT_AMOUNT: parseFloat(quotation.vatAmount || 0),
-    INCLUDE_VAT_AMOUNT: parseFloat(quotation.includeVatAmount || 0),
-    NET_PAYABLE: parseFloat(quotation.netPayable || 0),
-  };
-
-  const result = tryEvaluateFormula(expression, variableValues);
-  const netProfit = result.ok ? result.value : 0;
+  // สูตรกำไรสุทธิ อ้างอิงจากระบบเดิม (accounting-nexttripholiday: quotationModel::getNetProfit):
+  // รายได้รวม − ต้นทุนโฮลเซลล์ − ต้นทุนทั่วไป − ต้นทุนภาษีซื้อ(สุทธิ) − ต้นทุนภาษีขาย/หัก ณ ที่จ่ายลูกค้า(สุทธิ)
+  const netProfit = revenue - totalCost;
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
@@ -6192,9 +6224,6 @@ function ProfitTab({ quotation }: { quotation: any }) {
             <TrendingUp className="w-5 h-5" />
             สรุปกำไร-ขาดทุน
           </h3>
-          <Link href={`/settings/formulas/${quotationModule.key}`} className="text-xs text-blue-600 hover:underline whitespace-nowrap">
-            ตั้งค่าสูตรคำนวณ
-          </Link>
         </div>
       </CardHeader>
       <CardContent>
@@ -6217,27 +6246,36 @@ function ProfitTab({ quotation }: { quotation: any }) {
               </div>
             </div>
 
-            {!result.ok && (
-              <div className="text-sm bg-red-50 border border-red-200 rounded-lg p-3 text-red-700">
-                สูตรคำนวณกำไรสุทธิผิดพลาด: {result.error} — <Link href={`/settings/formulas/${quotationModule.key}`} className="underline">แก้ไขสูตร</Link>
-              </div>
-            )}
-
             <div className="space-y-2 sm:space-y-3 bg-gray-50 p-3 sm:p-4 rounded-lg text-xs sm:text-sm">
               <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-600 font-mono">สูตรที่ใช้</span>
-                <span className="font-mono text-gray-500 break-all text-right">{expression}</span>
+                <span className="text-gray-600">รายได้รวม (ยอดใบเสนอราคา)</span>
+                <span className="font-medium">{fmt(revenue)} ฿</span>
               </div>
-              {quotationModule.variables.map((v) => (
-                <div key={v.code} className="flex justify-between py-2 border-b border-gray-200">
-                  <span className="text-gray-600">{v.label}</span>
-                  <span className="font-medium">{fmt(variableValues[v.code] || 0)} ฿</span>
-                </div>
-              ))}
+              <div className="flex justify-between py-2 border-b border-gray-200">
+                <span className="text-gray-600">− ต้นทุนโฮลเซลล์รวม</span>
+                <span className="font-medium">{fmt(wholesaleCostTotal)} ฿</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-gray-200">
+                <span className="text-gray-600">− ต้นทุนทั่วไปรวม</span>
+                <span className="font-medium">{fmt(generalCostTotal)} ฿</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-gray-200">
+                <span className="text-gray-600">− ต้นทุนภาษีซื้อ (VAT ± หัก ณ ที่จ่าย จากแท็บ &quot;ภาษี&quot;)</span>
+                <span className="font-medium">{fmt(purchaseTaxCost)} ฿</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-gray-200">
+                <span className="text-gray-600">
+                  − ต้นทุนภาษีขาย/หัก ณ ที่จ่ายลูกค้า (VAT ขาย {fmt(saleVatTotal)} ฿ + หัก ณ ที่จ่ายไม่มีไฟล์แนบ {fmt(saleWithholdingCounted)} ฿)
+                </span>
+                <span className="font-medium">{fmt(saleTaxCost)} ฿</span>
+              </div>
               <div className="flex justify-between py-2 sm:py-3 border-t-2 border-gray-400">
                 <span className="font-semibold text-sm sm:text-lg">= กำไรสุทธิ</span>
                 <span className={`font-bold text-sm sm:text-lg ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(netProfit)} ฿</span>
               </div>
+              <p className="text-[11px] text-gray-400 pt-1">
+                * ต้นทุนภาษีซื้อ/ภาษีขาย คำนวณตามสูตรระบบเดิม: หากรายการมีไฟล์แนบ (หลักฐานใบหัก ณ ที่จ่าย) แล้ว จะไม่นับภาษีหัก ณ ที่จ่ายเป็นต้นทุน มีเฉพาะไฟล์แนบใน tab &quot;ภาษี&quot; (ภาษีซื้อ) และ tab &quot;ใบแจ้งหนี้&quot; (หลักฐานใบหัก ณ ที่จ่ายจากลูกค้า) เท่านั้นที่มีผล
+              </p>
             </div>
           </div>
         )}

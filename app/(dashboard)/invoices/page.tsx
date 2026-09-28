@@ -439,7 +439,7 @@ export default function InvoicesPage() {
                         {openMenu === invoice.id && (
                           <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-10">
                             <button 
-                              onClick={() => router.push(`/invoices/${invoice.id}`)}
+                              onClick={() => window.open(`/api/invoices/${invoice.id}/pdf`, '_blank')}
                               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                             >
                               <Eye className="w-4 h-4" />

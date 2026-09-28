@@ -33,7 +33,9 @@ export async function GET(request: NextRequest) {
         q.quotationNumber,
         q.tourName,
         c.name as customerName,
+        r.id as receiptId,
         r.receiptNumber,
+        cn.id as creditNoteId,
         cn.creditNoteNumber
       FROM customer_transactions ct
       LEFT JOIN invoices i ON ct.invoiceId = i.id
@@ -89,6 +91,8 @@ export async function GET(request: NextRequest) {
       quotationId: Number(t.quotationId),
       amount: parseFloat(t.amount) || 0,
       invoiceTotal: parseFloat(t.invoiceTotal) || 0,
+      receiptId: t.receiptId != null ? Number(t.receiptId) : null,
+      creditNoteId: t.creditNoteId != null ? Number(t.creditNoteId) : null,
     }));
     
     return NextResponse.json({

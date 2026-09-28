@@ -10,7 +10,7 @@ import { bahtText } from '@/lib/thai-baht-text';
 // เพราะเซิร์ฟเวอร์ที่รัน Puppeteer อาจไม่มีอินเทอร์เน็ตออกนอก (หรือถูกบล็อก) ทำให้ font โหลดไม่ขึ้น
 // แล้ว Chromium fallback ไปใช้ font อื่นแทน หน้าตา PDF จะดูต่างจากต้นฉบับไปเลยทั้งที่โครงสร้างถูกต้อง
 let cachedFontFaceCss: string | null = null;
-function getFontFaceCss(): string {
+export function getFontFaceCss(): string {
   if (cachedFontFaceCss !== null) return cachedFontFaceCss;
   try {
     const dir = path.join(process.cwd(), 'node_modules', '@fontsource', 'sarabun', 'files');
@@ -50,6 +50,7 @@ export interface QuotationPdfSettings {
   companyPhone: string;
   companyHotline: string;
   companyLicense: string;
+  companyTaxId: string;
   companyWebsite: string;
   companyEmail: string;
   bankName: string;
@@ -99,14 +100,14 @@ const THAI_MONTHS = [
   'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
 ];
 
-function thaiDate(d?: Date | string | null): string {
+export function thaiDate(d?: Date | string | null): string {
   if (!d) return '-';
   const dt = new Date(d);
   if (isNaN(dt.getTime())) return '-';
   return `${dt.getDate()} ${THAI_MONTHS[dt.getMonth()]} ${dt.getFullYear() + 543}`;
 }
 
-function thaiTime(d?: Date | string | null): string {
+export function thaiTime(d?: Date | string | null): string {
   if (!d) return '-น.';
   const dt = new Date(d);
   if (isNaN(dt.getTime())) return '-น.';
@@ -115,11 +116,11 @@ function thaiTime(d?: Date | string | null): string {
   return `${hh}:${mm} น.`;
 }
 
-function money(n: number | null | undefined): string {
+export function money(n: number | null | undefined): string {
   return (Number(n) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function esc(s: string | null | undefined): string {
+export function esc(s: string | null | undefined): string {
   if (!s) return '';
   return String(s)
     .replace(/&/g, '&amp;')
