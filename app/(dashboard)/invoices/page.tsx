@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Filter, Download, Eye, Edit, Trash2, MoreVertical, FileText, Clock, AlertCircle, CheckCircle, DollarSign } from 'lucide-react';
+import { Plus, Search, Filter, Download, Printer, Edit, Trash2, MoreVertical, FileText, Clock, AlertCircle, CheckCircle, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -442,8 +442,8 @@ export default function InvoicesPage() {
                               onClick={() => window.open(`/api/invoices/${invoice.id}/pdf`, '_blank')}
                               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                             >
-                              <Eye className="w-4 h-4" />
-                              ดูรายละเอียด
+                              <Printer className="w-4 h-4" />
+                              ปริ้น
                             </button>
                             <button 
                               onClick={() => router.push(`/invoices/${invoice.id}/edit`)}
