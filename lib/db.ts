@@ -11,11 +11,16 @@ import { dbConfig } from './db-config';
 // ONE pool (and its connectionLimit) ever exists per running process.
 const globalForDb = globalThis as unknown as { __dbPool?: mariadb.Pool };
 
+// NOTE: mariadb's pool eagerly opens `connectionLimit` idle connections at
+// startup by default (fixed-pool behavior) — this is a permanent footprint
+// per running process, NOT scaled to actual traffic. Keep this low since the
+// remote DB user has a hard `max_user_connections` cap shared by every
+// environment (dev + production) hitting it.
 const pool =
   globalForDb.__dbPool ??
   mariadb.createPool({
     ...dbConfig,
-    connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '10', 10),
+    connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '3', 10),
   });
 
 if (process.env.NODE_ENV !== 'production') {
